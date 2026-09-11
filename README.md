@@ -1,169 +1,217 @@
-# OutputLab — Personal Learning-to-Output System
+# OutputLab
 
-Aplikasi web (React + TypeScript + Vite + Tailwind + Supabase, deploy Cloudflare Pages).
-Bahasa antarmuka: Indonesia. Timezone tampilan: Asia/Jakarta. MVP tanpa AI.
+> **Ubah materi belajar menjadi output nyata.** Personal *learning-to-output system* — dari catatan pemahaman, refleksi, project, sampai portofolio.
 
-## 1. Struktur folder
+![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-6-646cff?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-06b6d4?logo=tailwindcss&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ecf8e?logo=supabase&logoColor=white)
+![Cloudflare](https://img.shields.io/badge/Cloudflare-Workers-f6821f?logo=cloudflare&logoColor=white)
+
+---
+
+## Daftar Isi
+
+- [Alur Produk](#alur-produk)
+- [Arsitektur & Struktur Folder](#arsitektur--struktur-folder)
+- [Database & Keamanan](#database--keamanan)
+- [Konfigurasi Environment](#konfigurasi-environment)
+- [Fitur](#fitur)
+- [Menjalankan Secara Lokal](#menjalankan-secara-lokal)
+- [Deploy ke Cloudflare](#deploy-ke-cloudflare)
+- [Checklist Pengujian Manual](#checklist-pengujian-manual)
+- [Batasan MVP](#batasan-mvp)
+
+---
+
+## Alur Produk
+
+```
+Lagi belajar apa? ──▶ Progress ──▶ Catatan ──▶ Komplet? ──▶ Produksi konten
+  (dasbor            (materi →      (pemahaman,    (tandai         (berita, Instagram,
+   fokus)             catatan →      kritis,        dipelajari)     YouTube, Blog, dll)
+                      komplet →      ide)
+                      konten)
+```
+
+Belajar yang komplet langsung jadi konten yang bisa ditunjukkan. Tanpa AI, tanpa tombol pajangan — semua workflow CRUD biasa yang benar-benar berfungsi.
+
+---
+
+## Arsitektur & Struktur Folder
+
+| Lapisan | Teknologi |
+|---|---|
+| Frontend | React 18 + TypeScript + Vite 6 |
+| Styling | Tailwind CSS 3 (mobile-first) |
+| Auth & Database | Supabase (Postgres + Auth + RLS) |
+| Hosting | Cloudflare Workers — Static Assets + SPA fallback |
+| Timezone tampilan | Asia/Jakarta (`id-ID`) |
 
 ```
 .
-├── index.html
-├── .env.example            # contoh env (salin jadi .env)
-├── public/
-│   └── _redirects          # SPA fallback untuk Cloudflare Pages (/* /index.html 200)
-├── supabase/
-│   └── migrations/
-│       └── 0001_outputlab.sql   # tabel + trigger + index + RLS
+├── index.html                  # entry HTML (lang="id")
+├── .env.example                # contoh env → salin menjadi .env
+├── wrangler.jsonc              # config deploy: assets ./dist + SPA fallback
+├── .nvmrc                      # kunci Node 20 untuk mesin build
+├── supabase/migrations/
+│   └── 0001_outputlab.sql      # tabel + trigger + index + RLS
 └── src/
-    ├── main.tsx            # entry
-    ├── App.tsx             # routing + protected routes
-    ├── index.css           # tailwind
-    ├── lib/
-    │   ├── supabaseClient.ts
-    │   └── time.ts         # format Asia/Jakarta, validasi URL
-    ├── types/index.ts
-    ├── context/AuthContext.tsx
-    ├── hooks/useToast.tsx
-    ├── components/
-    │   ├── Layout.tsx
-    │   ├── ProtectedRoute.tsx
-    │   └── ui.tsx          # Button, Input, Card, Badge, Empty/Error/Loading, ConfirmDialog
-    ├── services/
-    │   ├── learning.ts     # CRUD learning_items + notes
-    │   ├── projects.ts     # CRUD projects, tasks, outputs, review
-    │   └── dashboard.ts    # agregasi dasbor
-    └── pages/
-        ├── Auth.tsx        # Login + Register
-        ├── Dashboard.tsx
-        ├── Learning.tsx    # list + form + detail/refleksi
-        ├── Projects.tsx    # list + form + detail (task/output/review)
-        └── Portfolio.tsx
+    ├── main.tsx / App.tsx      # entry + routing + protected routes
+    ├── index.css               # Tailwind
+    ├── lib/                    # supabaseClient, time (Asia/Jakarta, validasi URL)
+    ├── types/                  # model + label berbahasa Indonesia
+    ├── context/AuthContext.tsx # sesi Supabase Auth
+    ├── hooks/useToast.tsx      # notifikasi toast global
+    ├── components/             # Layout, ProtectedRoute, ui (reusable)
+    ├── services/               # learning, projects, dashboard (query terpusat)
+    └── pages/                  # Auth, Dashboard, Learning, Projects, Portfolio
 ```
 
-## 2. SQL migration Supabase
+> Konvensi kode: komponen UI kecil dan reusable, logika query terisolasi di `services/`, tidak ada satu file yang menggembung, tidak ada tombol yang belum berfungsi.
 
-File: `supabase/migrations/0001_outputlab.sql`
+---
 
-Cara pakai:
-1. Buat project di https://supabase.com → dapatkan Project URL + anon key.
-2. Buka **SQL Editor → New query**, paste seluruh isi file migration, **Run**.
-3. Verifikasi di **Table Editor**: `learning_items`, `learning_notes`, `projects`,
-   `project_tasks`, `outputs`, `project_reviews` muncul.
-4. (Opsional) **Authentication → Providers → Email**: pastikan Email provider aktif.
-   Matikan "Confirm email" selama pengujian lokal bila ingin login langsung.
+## Database & Keamanan
 
-RLS: aktif di semua tabel user-owned, policy `auth.uid() = user_id`.
-Task/output/review juga dicek terhadap `projects` induk milik user yang sama,
-sehingga relasi `project_id` tidak bisa dipakai mengintip data orang lain.
-Satu primary output per project ditegakkan via unique index parsial
-`outputs_one_primary_per_project WHERE is_primary = true`
-+ logika frontend menonaktifkan primary lama.
+Enam tabel, semua dengan `user_id`, UUID, dan `created_at`/`updated_at`:
 
-## 3. Environment variables
+| Tabel | Peran |
+|---|---|
+| `learning_items` | materi belajar + status (`new`/`learning`/`learned`) |
+| `learning_notes` | refleksi (pemahaman ≥ 100 karakter, enforced di DB via `CHECK`) |
+| `projects` | project manual / dari materi / lanjutan (`is_featured` untuk portofolio) |
+| `project_tasks` | checklist (`todo`/`doing`/`done` + `position`) |
+| `outputs` | link hasil karya (maks. **satu** primary per project via unique index parsial) |
+| `project_reviews` | review (satu per project via `UNIQUE(project_id)`) |
+
+**Row Level Security aktif di semua tabel.** Setiap policy mengikat `auth.uid() = user_id`, dan untuk `project_tasks`, `outputs`, `project_reviews` ditambah pengecekan bahwa `project` induk juga milik user yang sama — sehingga relasi `project_id` tidak bisa dipakai mengintip data orang lain.
+
+Cara menerapkan: **Supabase Dashboard → SQL Editor → New query** → paste seluruh isi `supabase/migrations/0001_outputlab.sql` → **Run**. Pastikan juga provider **Email** aktif di **Authentication**.
+
+---
+
+## Konfigurasi Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Isi `.env`:
+| Variabel | Contoh | Keterangan |
+|---|---|---|
+| `VITE_SUPABASE_URL` | `https://xyzcompany.supabase.co` | Supabase → Project Settings → API |
+| `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOi...` | **anon public key** — bukan `service_role` |
 
-```
-VITE_SUPABASE_URL=https://xyzcompany.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOi...
-```
+> `service_role` key tidak pernah dipakai di project ini. Nilai `VITE_*` ikut terkirim ke browser, jadi perlakukan anon key sebagaimana mestinya.
 
-Aturan:
-- Hanya `anon` key di frontend. **Jangan pernah** pakai `service_role` di kode ini.
-- Di Cloudflare Pages, set variabel yang sama via **Pages → Settings → Environment variables**
-  (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) untuk Production + Preview.
+---
 
-## 4–6. Halaman, CRUD, RLS
+## Fitur
 
-- Auth: `/masuk`, `/daftar`, logout di header, route lain terproteksi.
-- Dasbor `/`: 4 kartu statistik, task tertunda, project aktif terbaru, materi tanpa refleksi.
-- Materi `/materi`: CRUD + status; detail `/materi/:id` berisi info + form refleksi
-  (pemahaman min. 100 karakter), tombol simpan refleksi / tandai dipelajari / buat project.
-- Project `/project`: CRUD manual + filter status, bisa taut ke materi.
-  Detail `/project/:id`: info + materi sumber + progress (done/total) + CRUD task
-  (klik badge Todo→Doing→Done) + CRUD output (validasi URL, 1 primary, buka tab baru)
-  + review (what_worked/failed/insight/next) + tandai selesai / project lanjutan / kembali ke materi.
-- Portofolio `/portofolio`: project `is_featured=true` + sumber belajar + insight + jumlah output.
-- Semua mutasi menampilkan toast; hapus selalu konfirmasi; ada loading/empty/error state;
-  mobile-first; tidak ada tombol dekoratif.
+- **Auth** — daftar, masuk, keluar; semua route selain `/masuk` dan `/daftar` terproteksi.
+- **Dasbor** — jawaban atas "lagi belajar apa?": materi yang sedang dipelajari + progress + langkah berikutnya, daftar "siap jadi konten", lalu ringkasan statistik.
+- **Materi** — CRUD + progress 4 langkah (materi → catatan → komplet → konten); halaman detail berisi info sumber, catatan belajar, tombol *tandai komplet*, dan kartu **Produksi Konten** (pilih platform Berita/Instagram/YouTube/Blog/dll, tempel link — project perantara dibuat otomatis).
+- **Project** — buat manual atau dari materi; filter status; detail berisi progress (`done/total`), CRUD task (klik badge Todo → Doing → Done), CRUD output (validasi URL, satu primary, buka di tab baru), review, *tandai selesai*, *buat project lanjutan*, *kembali ke materi*.
+- **Portofolio** — project bertanda featured lengkap dengan sumber belajar, insight kunci, dan output utama.
+- **UX** — toast setiap simpan, konfirmasi setiap hapus, state loading/empty/error, validasi form, mobile-first, seluruh antarmuka berbahasa Indonesia.
 
-## 7. Menjalankan secara lokal
+---
 
-Butuh Node 20+ (disarankan 20.19+ / 22 LTS).
+## Menjalankan Secara Lokal
+
+Butuh Node 20+ (disarankan 20.19+ atau 22 LTS).
 
 ```bash
 npm install
-cp .env.example .env   # lalu isi
-npm run dev            # buka http://localhost:5173
-npm run build          # cek build lolos (tsc + vite)
+cp .env.example .env   # lalu isi nilainya
+npm run dev            # http://localhost:5173
+```
+
+```bash
+npm run build          # verifikasi: tsc + vite build
 npm run preview        # pratinjau hasil build
 ```
 
-Catatan: jika `npm run build` gagal karena versi Node lama, upgrade Node lalu ulangi.
+> Proses `npm run dev` harus dijalankan dari terminal sendiri dan dibiarkan menyala — ia mati jika terminal ditutup.
 
-## 8. Deploy ke Cloudflare Pages
+---
 
-Opsi A — via Dashboard (disarankan):
-1. Push repo ini ke GitHub/GitLab.
-2. Cloudflare Dashboard → **Workers & Pages → Create → Pages → Connect to Git**.
-3. Build settings:
-   - Framework preset: **Vite**
+## Deploy ke Cloudflare
+
+Project ter-deploy sebagai **Worker dengan Static Assets** (SPA fallback via `not_found_handling: single-page-application` di `wrangler.jsonc` — pengganti `_redirects` yang ditolak validator Workers).
+
+**Via dashboard (disarankan):**
+
+1. Push repo ke GitHub.
+2. Cloudflare Dashboard → **Workers & Pages → Create** → hubungkan repo `LearnThenProject`.
+3. Isi kolom dengan **perintahnya**, bukan nama kolomnya:
    - Build command: `npm run build`
-   - Build output directory: `dist`
-   - Root directory: `/` (atau subfolder bila monorepo)
-4. Environment variables: tambahkan `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY`
-   (Production + Preview), lalu **Save → Deploy**.
-5. File `public/_redirects` (`/* /index.html 200`) membuat refresh route SPA tidak 404.
+   - Deploy command: `npx wrangler deploy`
+   - Root directory: kosongkan.
+4. Tambahkan environment variables `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY` untuk **Production dan Preview** → Save → Deploy.
+5. Setiap push ke `main` memicu build baru otomatis.
 
-Opsi B — via Wrangler CLI:
+**Via CLI:**
 
 ```bash
-npx wrangler pages deploy dist --project-name outputlab
+npm run build
+npx wrangler deploy
 ```
 
-Tidak ada API server-side pada MVP ini (langsung Supabase client dari browser),
-jadi tidak perlu Workers/Functions.
+---
 
-## 9. Checklist pengujian manual
+## Checklist Pengujian Manual
 
-Auth & keamanan:
-- [ ] Daftar akun baru → bisa masuk → bisa keluar.
-- [ ] Buka `/` tanpa login → dialihkan ke `/masuk`.
-- [ ] User A tidak bisa melihat/mengubah data User B (uji 2 akun + 2 browser).
+<details>
+<summary><strong>Auth & keamanan</strong></summary>
 
-Dasbor:
+- [ ] Daftar → masuk → keluar berhasil.
+- [ ] Akses `/` tanpa login dialihkan ke `/masuk`.
+- [ ] Dua akun berbeda tidak bisa saling melihat/mengubah data.
+
+</details>
+
+<details>
+<summary><strong>Dasbor</strong></summary>
+
 - [ ] Angka materi / project aktif / selesai / output benar.
-- [ ] Task tertunda muncul; klik menuju project yang benar.
-- [ ] Materi tanpa refleksi muncul; hilang setelah refleksi disimpan.
+- [ ] Task tertunda tampil dan mengarah ke project yang benar.
+- [ ] Materi tanpa refleksi tampil, lalu hilang setelah refleksi disimpan.
 
-Materi:
-- [ ] Tambah (judul wajib; URL salah ditolak), ubah, hapus (ada konfirmasi + toast).
-- [ ] Detail menampilkan judul/URL/jenis/deskripsi/tujuan.
-- [ ] Refleksi < 100 karakter ditolak dengan pesan jumlah karakter.
-- [ ] “Tandai sudah dipelajari” mengubah status; “Buat project dari materi” membuat project tertaut.
+</details>
 
-Project:
+<details>
+<summary><strong>Materi</strong></summary>
+
+- [ ] Tambah (judul wajib, URL salah ditolak), ubah, hapus (konfirmasi + toast).
+- [ ] Detail menampilkan judul, URL, jenis, deskripsi, tujuan belajar.
+- [ ] Refleksi di bawah 100 karakter ditolak dengan pesan jumlah karakter.
+- [ ] *Tandai sudah dipelajari* mengubah status; *buat project dari materi* membuat project tertaut.
+
+</details>
+
+<details>
+<summary><strong>Project</strong></summary>
+
 - [ ] Buat manual + dari materi; ubah; hapus (konfirmasi).
-- [ ] Tambah task → progress % berubah; klik badge Todo→Doing→Done; hapus task.
-- [ ] Tambah output: URL invalid ditolak; link terbuka di tab baru;
-      set output utama kedua → yang lama otomatis non-utama.
-- [ ] Simpan review → tandai selesai → buat project lanjutan (parent terisi)
-      → kembali ke materi.
+- [ ] Task: tambah → progress % berubah; badge Todo → Doing → Done; hapus.
+- [ ] Output: URL invalid ditolak; link terbuka di tab baru; output utama kedua otomatis menggantikan yang lama.
+- [ ] Review tersimpan → tandai selesai → project lanjutan terisi parent → kembali ke materi.
 
-Portofolio:
-- [ ] Centang featured di ubah project → muncul di `/portofolio` lengkap
-      (judul, deskripsi, sumber, insight, jumlah output, tombol buka output).
+</details>
 
-Umum:
-- [ ] Mobile (360px): tidak ada overflow horizontal; form mudah dipakai.
-- [ ] Setiap simpan ada toast; setiap hapus ada konfirmasi; ada empty/error/loading state.
-- [ ] `npm run build` lolos; preview Cloudflare Pages normal; tidak ada `service_role` di bundle.
+<details>
+<summary><strong>Portofolio & umum</strong></summary>
 
-## 10. Batasan MVP
+- [ ] Project featured muncul di `/portofolio` lengkap (judul, deskripsi, sumber, insight, output).
+- [ ] Tampilan 360px tanpa overflow horizontal; tiap simpan ada toast; tiap hapus ada konfirmasi.
+- [ ] `npm run build` lolos; tidak ada `service_role` di bundle.
 
-AI, reminder, dan integrasi platform (verifikasi konten otomatis dsb.) **tidak** dikerjakan
-sebelum checklist di atas lolos. Aplikasi hanya menyimpan URL apa adanya.
+</details>
+
+---
+
+## Batasan MVP
+
+AI, reminder, dan integrasi platform (termasuk verifikasi konten otomatis) **tidak dikerjakan** sebelum checklist di atas lolos. Aplikasi menyimpan URL apa adanya — tanpa klaim verifikasi atau publikasi.

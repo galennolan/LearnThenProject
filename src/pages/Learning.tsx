@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { LearningItem, SourceType } from '../types';
-import { SOURCE_TYPE_LABELS } from '../types';
-import { createLearningItem, deleteLearningItem, getLearningItem, getLearningNote, listLearningItems, markLearned, saveLearningNote, updateLearningItem } from '../services/learning';
+import type { LearningItem, Output, SourceType } from '../types';
+import { PLATFORM_LABELS, SOURCE_TYPE_LABELS } from '../types';
+import { createLearningItem, deleteLearningItem, getLearningItem, getLearningNote, listContentForLearning, listLearningItems, markLearned, produceContentFromLearning, saveLearningNote, updateLearningItem } from '../services/learning';
 import { createProject } from '../services/projects';
 import { isValidUrl } from '../lib/time';
 import { useToast } from '../hooks/useToast';
@@ -216,6 +216,16 @@ export function LearningDetailPage() {
   const [ideas, setIdeas] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [noteMsg, setNoteMsg] = useState('');
+  const [hasNote, setHasNote] = useState(false);
+
+  const [contents, setContents] = useState<Output[]>([]);
+  const [cTitle, setCTitle] = useState('');
+  const [cPlatform, setCPlatform] = useState<Output['platform']>('news');
+  const [cUrl, setCUrl] = useState('');
+  const [cDesc, setCDesc] = useState('');
+  const [cPrimary, setCPrimary] = useState(false);
+  const [savingContent, setSavingContent] = useState(false);
+  const [contentMsg, setContentMsg] = useState('');
 
   const load = async () => {
     if (!id) return;
@@ -226,11 +236,13 @@ export function LearningDetailPage() {
       setItem(m);
       const note = await getLearningNote(id);
       if (note) {
+        setHasNote(true);
         setUnderstanding(note.understanding);
         setCriticalComment(note.critical_comment ?? '');
         setQuestions(note.questions ?? '');
         setIdeas(note.ideas ?? '');
       }
+      setContents(await listContentForLearning(id));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat materi.');
     } finally {
@@ -259,6 +271,7 @@ export function LearningDetailPage() {
         ideas: ideas.trim() || null,
       });
       push('Refleksi tersimpan.');
+      setHasNote(true);
     } catch (e) {
       setNoteMsg(e instanceof Error ? e.message : 'Gagal menyimpan refleksi.');
     } finally {
@@ -295,6 +308,43 @@ export function LearningDetailPage() {
     }
   };
 
+  const handleProduceContent = async () => {
+    if (!id) return;
+    setContentMsg('');
+    if (!cTitle.trim()) {
+      setContentMsg('Judul konten wajib diisi.');
+      return;
+    }
+    if (!isValidUrl(cUrl.trim())) {
+      setContentMsg('URL konten tidak valid. Gunakan http(s)://...');
+      return;
+    }
+    setSavingContent(true);
+    try {
+      const created = await produceContentFromLearning(id, {
+        title: cTitle.trim(),
+        platform: cPlatform,
+        url: cUrl.trim(),
+        description: cDesc.trim() || null,
+        is_primary: cPrimary,
+      });
+      if (created.is_primary) {
+        setContents(await listContentForLearning(id));
+      } else {
+        setContents((list) => [created, ...list]);
+      }
+      setCTitle('');
+      setCUrl('');
+      setCDesc('');
+      setCPrimary(false);
+      push('Konten tersimpan. Link dicatat apa adanya (belum diverifikasi otomatis).');
+    } catch (e) {
+      setContentMsg(e instanceof Error ? e.message : 'Gagal menyimpan konten.');
+    } finally {
+      setSavingContent(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!id) return;
     setDeleting(true);
@@ -313,6 +363,16 @@ export function LearningDetailPage() {
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!item) return <EmptyState title="Materi tidak ditemukan" />;
 
+  const isLearned = item.status === 'learned';
+  const hasContent = contents.length > 0;
+  const steps = [
+    { label: 'Materi', done: true },
+    { label: 'Catatan', done: hasNote },
+    { label: 'Komplet', done: isLearned },
+    { label: 'Konten', done: hasContent },
+  ];
+  const progressPercent = Math.round((steps.filter((s) => s.done).length / steps.length) * 100);
+
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
       <div className="flex items-start justify-between gap-2">
@@ -327,6 +387,23 @@ export function LearningDetailPage() {
           <SecondaryButton>Ubah</SecondaryButton>
         </Link>
       </div>
+
+      <Card>
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900">Progress belajar</h2>
+          <Badge>{progressPercent}%</Badge>
+        </div>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {steps.map((s) => (
+            <div key={s.label} className={`rounded-lg px-2 py-2 text-center text-xs font-medium ${s.done ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              {s.done ? '✓ ' : ''}{s.label}
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full bg-slate-900 transition-all" style={{ width: `${progressPercent}%` }} />
+        </div>
+      </Card>
 
       <Card>
         <dl className="space-y-2 text-sm">
@@ -381,6 +458,79 @@ export function LearningDetailPage() {
           {noteMsg && <p className="text-sm text-red-600">{noteMsg}</p>}
           <Button onClick={handleSaveNote} disabled={savingNote} className="w-full">
             {savingNote ? 'Menyimpan...' : 'Simpan refleksi'}
+          </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 className="font-semibold text-slate-900">Produksi Konten</h2>
+        {!isLearned ? (
+          <p className="mt-1 text-xs text-slate-500">
+            Selesaikan belajar dulu (tombol <em>Tandai sudah dipelajari</em> di atas), lalu ubah pemahamanmu jadi konten: berita, Instagram, YouTube, atau lainnya.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-slate-500">
+            Belajar komplet — saatnya produksi. Pilih platform, tempel link karyamu.
+          </p>
+        )}
+
+        {contents.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {contents.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 p-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-900">{c.title}</p>
+                  <p className="text-xs text-slate-500">{PLATFORM_LABELS[c.platform]}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {c.is_primary && <Badge>Utama</Badge>}
+                  <a href={c.url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-700 underline">
+                    Buka
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3">
+          <div className="grid grid-cols-3 gap-2">
+            {(['news', 'instagram', 'youtube', 'tiktok', 'blog', 'linkedin'] as Output['platform'][]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setCPlatform(p)}
+                className={`rounded-lg border px-2 py-2 text-xs font-medium ${cPlatform === p ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600'}`}
+              >
+                {PLATFORM_LABELS[p]}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Platform">
+              <SelectInput value={cPlatform} onChange={(e) => setCPlatform(e.target.value as Output['platform'])}>
+                {(Object.keys(PLATFORM_LABELS) as Output['platform'][]).map((p) => (
+                  <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
+                ))}
+              </SelectInput>
+            </Field>
+            <Field label="Judul konten *">
+              <TextInput value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="cth: Utas ringkasanku" />
+            </Field>
+          </div>
+          <Field label="Link konten *">
+            <TextInput value={cUrl} onChange={(e) => setCUrl(e.target.value)} placeholder="https://..." inputMode="url" />
+          </Field>
+          <Field label="Catatan (opsional)">
+            <TextArea rows={2} value={cDesc} onChange={(e) => setCDesc(e.target.value)} placeholder="Konteks singkat konten ini..." />
+          </Field>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={cPrimary} onChange={(e) => setCPrimary(e.target.checked)} />
+            Jadikan konten utama
+          </label>
+          {contentMsg && <p className="text-sm text-red-600">{contentMsg}</p>}
+          <Button onClick={handleProduceContent} disabled={savingContent} className="w-full">
+            {savingContent ? 'Menyimpan...' : 'Simpan konten'}
           </Button>
         </div>
       </Card>

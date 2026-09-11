@@ -47,6 +47,8 @@ export type OutputPlatform =
   | 'linkedin'
   | 'journal'
   | 'website'
+  | 'news'
+  | 'blog'
   | 'other';
 
 export interface LearningItem {
@@ -177,5 +179,7 @@ export const PLATFORM_LABELS: Record<OutputPlatform, string> = {
   linkedin: 'LinkedIn',
   journal: 'Jurnal',
   website: 'Website',
+  news: 'Berita',
+  blog: 'Blog',
   other: 'Lainnya',
 };
