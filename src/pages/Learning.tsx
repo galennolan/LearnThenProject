@@ -2,72 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import type { LearningItem, Output, SourceType } from '../types';
 import { PLATFORM_LABELS, SOURCE_TYPE_LABELS } from '../types';
-import { createLearningItem, deleteLearningItem, getLearningItem, getLearningNote, listContentForLearning, listLearningItems, markLearned, produceContentFromLearning, saveLearningNote, updateLearningItem } from '../services/learning';
-import { createProject } from '../services/projects';
+import { createLearningItem, deleteLearningItem, getLearningItem, getLearningNote, listContentForLearning, markLearned, produceContentFromLearning, saveLearningNote, updateLearningItem } from '../services/learning';
 import { isValidUrl } from '../lib/time';
 import { useToast } from '../hooks/useToast';
 import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Loading, SecondaryButton, SelectInput, TextArea, TextInput } from '../components/ui';
 
 const SOURCE_TYPES: SourceType[] = ['article', 'news', 'journal', 'youtube', 'documentation', 'book', 'google_doc', 'other'];
-
-export function LearningListPage() {
-  const [items, setItems] = useState<LearningItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const load = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      setItems(await listLearningItems());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Gagal memuat materi.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  if (loading) return <Loading />;
-  if (error) return <ErrorState message={error} onRetry={load} />;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Materi Belajar</h1>
-          <p className="text-sm text-slate-500">{items.length} materi tersimpan.</p>
-        </div>
-        <Link to="/materi/baru">
-          <Button>+ Materi</Button>
-        </Link>
-      </div>
-      {items.length === 0 ? (
-        <EmptyState title="Belum ada materi" desc="Klik + Materi untuk menambahkan bacaan, video, atau dokumentasi." />
-      ) : (
-        <div className="grid gap-3">
-          {items.map((m) => (
-            <Link key={m.id} to={`/materi/${m.id}`}>
-              <Card className="transition hover:border-slate-400">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-medium text-slate-900">{m.title}</p>
-                  <Badge>{m.status === 'learned' ? 'Selesai' : m.status === 'learning' ? 'Diproses' : 'Baru'}</Badge>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  {SOURCE_TYPE_LABELS[m.source_type]}
-                  {m.topic ? ` • ${m.topic}` : ''}
-                </p>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function LearningFormPage() {
   const { id } = useParams();
@@ -210,10 +150,7 @@ export function LearningDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const [understanding, setUnderstanding] = useState('');
-  const [criticalComment, setCriticalComment] = useState('');
-  const [questions, setQuestions] = useState('');
-  const [ideas, setIdeas] = useState('');
+  const [note, setNote] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [noteMsg, setNoteMsg] = useState('');
   const [hasNote, setHasNote] = useState(false);
@@ -222,8 +159,6 @@ export function LearningDetailPage() {
   const [cTitle, setCTitle] = useState('');
   const [cPlatform, setCPlatform] = useState<Output['platform']>('news');
   const [cUrl, setCUrl] = useState('');
-  const [cDesc, setCDesc] = useState('');
-  const [cPrimary, setCPrimary] = useState(false);
   const [savingContent, setSavingContent] = useState(false);
   const [contentMsg, setContentMsg] = useState('');
 
@@ -234,13 +169,10 @@ export function LearningDetailPage() {
     try {
       const m = await getLearningItem(id);
       setItem(m);
-      const note = await getLearningNote(id);
-      if (note) {
+      const existing = await getLearningNote(id);
+      if (existing) {
         setHasNote(true);
-        setUnderstanding(note.understanding);
-        setCriticalComment(note.critical_comment ?? '');
-        setQuestions(note.questions ?? '');
-        setIdeas(note.ideas ?? '');
+        setNote(existing.understanding);
       }
       setContents(await listContentForLearning(id));
     } catch (e) {
@@ -258,22 +190,17 @@ export function LearningDetailPage() {
   const handleSaveNote = async () => {
     if (!id) return;
     setNoteMsg('');
-    if (understanding.trim().length < 100) {
-      setNoteMsg(`Pemahaman masih ${understanding.trim().length} karakter, minimal 100 karakter.`);
+    if (note.trim().length < 100) {
+      setNoteMsg(`Catatan masih ${note.trim().length} karakter, minimal 100 karakter.`);
       return;
     }
     setSavingNote(true);
     try {
-      await saveLearningNote(id, {
-        understanding: understanding.trim(),
-        critical_comment: criticalComment.trim() || null,
-        questions: questions.trim() || null,
-        ideas: ideas.trim() || null,
-      });
-      push('Refleksi tersimpan.');
+      await saveLearningNote(id, { understanding: note.trim() });
+      push('Catatan tersimpan.');
       setHasNote(true);
     } catch (e) {
-      setNoteMsg(e instanceof Error ? e.message : 'Gagal menyimpan refleksi.');
+      setNoteMsg(e instanceof Error ? e.message : 'Gagal menyimpan catatan.');
     } finally {
       setSavingNote(false);
     }
@@ -287,24 +214,6 @@ export function LearningDetailPage() {
       push('Materi ditandai sudah dipelajari.');
     } catch (e) {
       push(e instanceof Error ? e.message : 'Gagal memperbarui.', 'error');
-    }
-  };
-
-  const handleCreateProject = async () => {
-    if (!id || !item) return;
-    try {
-      const p = await createProject({
-        title: `Output: ${item.title}`,
-        description: item.learning_goal,
-        project_type: 'learning',
-        status: 'planned',
-        priority: 'medium',
-        learning_item_id: id,
-      });
-      push('Project dibuat dari materi.');
-      navigate(`/project/${p.id}`);
-    } catch (e) {
-      push(e instanceof Error ? e.message : 'Gagal membuat project.', 'error');
     }
   };
 
@@ -325,8 +234,8 @@ export function LearningDetailPage() {
         title: cTitle.trim(),
         platform: cPlatform,
         url: cUrl.trim(),
-        description: cDesc.trim() || null,
-        is_primary: cPrimary,
+        description: null,
+        is_primary: contents.length === 0,
       });
       if (created.is_primary) {
         setContents(await listContentForLearning(id));
@@ -335,8 +244,6 @@ export function LearningDetailPage() {
       }
       setCTitle('');
       setCUrl('');
-      setCDesc('');
-      setCPrimary(false);
       push('Konten tersimpan. Link dicatat apa adanya (belum diverifikasi otomatis).');
     } catch (e) {
       setContentMsg(e instanceof Error ? e.message : 'Gagal menyimpan konten.');
@@ -430,47 +337,39 @@ export function LearningDetailPage() {
             </div>
           )}
         </dl>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <SecondaryButton onClick={handleMarkLearned} className="flex-1">
-            Tandai sudah dipelajari
-          </SecondaryButton>
-          <Button onClick={handleCreateProject} className="flex-1">
-            Buat project dari materi
+        {!isLearned ? (
+          <Button onClick={handleMarkLearned} className="mt-4 w-full">
+            Tandai belajar selesai
           </Button>
-        </div>
+        ) : (
+          <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
+            Belajar selesai — tinggal produksi konten di bawah.
+          </p>
+        )}
       </Card>
 
       <Card>
-        <h2 className="font-semibold text-slate-900">Refleksi</h2>
-        <div className="mt-3 space-y-4">
-          <Field label="Pemahaman * (min. 100 karakter)" hint={`${understanding.trim().length}/100 karakter`}>
-            <TextArea rows={6} value={understanding} onChange={(e) => setUnderstanding(e.target.value)} placeholder="Tulis ulang dengan bahasamu sendiri: apa inti materi ini?" />
-          </Field>
-          <Field label="Komentar kritis (opsional)">
-            <TextArea rows={3} value={criticalComment} onChange={(e) => setCriticalComment(e.target.value)} placeholder="Apa yang kurang meyakinkan / bias / perlu diuji?" />
-          </Field>
-          <Field label="Pertanyaan (opsional)">
-            <TextArea rows={2} value={questions} onChange={(e) => setQuestions(e.target.value)} placeholder="Apa yang masih membingungkan?" />
-          </Field>
-          <Field label="Ide penerapan (opsional)">
-            <TextArea rows={2} value={ideas} onChange={(e) => setIdeas(e.target.value)} placeholder="Ide project / eksperimen dari materi ini..." />
-          </Field>
+        <h2 className="font-semibold text-slate-900">Catatan</h2>
+        <p className="mt-1 text-xs text-slate-500">Tulis ulang dengan bahasamu sendiri. Minimal 100 karakter.</p>
+        <div className="mt-3 space-y-3">
+          <TextArea rows={6} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Apa inti materi ini? Apa yang masih membingungkan? Mau dipakai untuk apa?" />
+          <p className="text-xs text-slate-500">{note.trim().length}/100 karakter</p>
           {noteMsg && <p className="text-sm text-red-600">{noteMsg}</p>}
           <Button onClick={handleSaveNote} disabled={savingNote} className="w-full">
-            {savingNote ? 'Menyimpan...' : 'Simpan refleksi'}
+            {savingNote ? 'Menyimpan...' : 'Simpan catatan'}
           </Button>
         </div>
       </Card>
 
       <Card>
-        <h2 className="font-semibold text-slate-900">Produksi Konten</h2>
+        <h2 className="font-semibold text-slate-900">Hasil</h2>
         {!isLearned ? (
           <p className="mt-1 text-xs text-slate-500">
-            Selesaikan belajar dulu (tombol <em>Tandai sudah dipelajari</em> di atas), lalu ubah pemahamanmu jadi konten: berita, Instagram, YouTube, atau lainnya.
+            Selesaikan belajar dulu (tombol di atas), lalu ubah pemahamanmu jadi konten.
           </p>
         ) : (
           <p className="mt-1 text-xs text-slate-500">
-            Belajar komplet — saatnya produksi. Pilih platform, tempel link karyamu.
+            Belajar komplet — pilih platform, tempel link karyamu.
           </p>
         )}
 
@@ -521,13 +420,6 @@ export function LearningDetailPage() {
           <Field label="Link konten *">
             <TextInput value={cUrl} onChange={(e) => setCUrl(e.target.value)} placeholder="https://..." inputMode="url" />
           </Field>
-          <Field label="Catatan (opsional)">
-            <TextArea rows={2} value={cDesc} onChange={(e) => setCDesc(e.target.value)} placeholder="Konteks singkat konten ini..." />
-          </Field>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={cPrimary} onChange={(e) => setCPrimary(e.target.checked)} />
-            Jadikan konten utama
-          </label>
           {contentMsg && <p className="text-sm text-red-600">{contentMsg}</p>}
           <Button onClick={handleProduceContent} disabled={savingContent} className="w-full">
             {savingContent ? 'Menyimpan...' : 'Simpan konten'}

@@ -65,8 +65,8 @@ Belajar yang komplet langsung jadi konten yang bisa ditunjukkan. Tanpa AI, tanpa
     ├── context/AuthContext.tsx # sesi Supabase Auth
     ├── hooks/useToast.tsx      # notifikasi toast global
     ├── components/             # Layout, ProtectedRoute, ui (reusable)
-    ├── services/               # learning, projects, dashboard (query terpusat)
-    └── pages/                  # Auth, Dashboard, Learning, Projects, Portfolio
+    ├── services/               # learning (materi, catatan, progres, konten), projects (mesin konten)
+    └── pages/                  # Auth, Belajar (beranda), Learning (form+detail), Hasil
 ```
 
 > Konvensi kode: komponen UI kecil dan reusable, logika query terisolasi di `services/`, tidak ada satu file yang menggembung, tidak ada tombol yang belum berfungsi.
@@ -109,12 +109,11 @@ cp .env.example .env
 
 ## Fitur
 
-- **Auth** — daftar, masuk, keluar; semua route selain `/masuk` dan `/daftar` terproteksi.
-- **Dasbor** — jawaban atas "lagi belajar apa?": materi yang sedang dipelajari + progress + langkah berikutnya, daftar "siap jadi konten", lalu ringkasan statistik.
-- **Materi** — CRUD + progress 4 langkah (materi → catatan → komplet → konten); halaman detail berisi info sumber, catatan belajar, tombol *tandai komplet*, dan kartu **Produksi Konten** (pilih platform Berita/Instagram/YouTube/Blog/dll, tempel link — project perantara dibuat otomatis).
-- **Project** — buat manual atau dari materi; filter status; detail berisi progress (`done/total`), CRUD task (klik badge Todo → Doing → Done), CRUD output (validasi URL, satu primary, buka di tab baru), review, *tandai selesai*, *buat project lanjutan*, *kembali ke materi*.
-- **Portofolio** — project bertanda featured lengkap dengan sumber belajar, insight kunci, dan output utama.
-- **UX** — toast setiap simpan, konfirmasi setiap hapus, state loading/empty/error, validasi form, mobile-first, seluruh antarmuka berbahasa Indonesia.
+- **Auth** — daftar, masuk, keluar; semua halaman terproteksi.
+- **Belajar** (`/`) — daftar "lagi belajar apa": tiap kartu menampilkan progres + langkah berikutnya. Satu tombol **+ Baru**.
+- **Detail belajar** (`/materi/:id`) — info materi, progres 4 langkah, **satu kolom catatan** (min. 100 karakter), tombol **Tandai belajar selesai**, dan daftar **Hasil** + form tambah (platform, judul, link).
+- **Hasil** (`/hasil`) — semua konten yang pernah dibuat, lengkap dengan platform, materi sumber, dan link.
+- **UX** — toast setiap simpan, konfirmasi setiap hapus, state loading/empty/error, mobile-first, berbahasa Indonesia.
 
 ---
 

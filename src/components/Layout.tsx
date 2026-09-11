@@ -22,16 +22,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="flex items-center gap-1 overflow-x-auto">
             <NavLink to="/" className={linkCls}>
-              Dasbor
+              Belajar
             </NavLink>
-            <NavLink to="/materi" className={linkCls}>
-              Materi
-            </NavLink>
-            <NavLink to="/project" className={linkCls}>
-              Project
-            </NavLink>
-            <NavLink to="/portofolio" className={linkCls}>
-              Portofolio
+            <NavLink to="/hasil" className={linkCls}>
+              Hasil
             </NavLink>
           </nav>
           <div className="flex items-center gap-2">

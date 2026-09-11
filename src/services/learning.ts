@@ -225,3 +225,21 @@ export async function listContentForLearning(learningItemId: string) {
   if (error) throw new Error(error.message);
   return data as Output[];
 }
+
+export interface ContentWithSource extends Output {
+  learning_title?: string;
+}
+
+/** Semua hasil milik user + judul materi sumbernya. */
+export async function listAllContent(): Promise<ContentWithSource[]> {
+  const { data, error } = await supabase
+    .from('outputs')
+    .select('*, projects(title, learning_items(title))')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((o) => ({
+    ...(o as unknown as Output),
+    learning_title: (o['projects'] as { learning_items?: { title?: string } | null } | null)
+      ?.learning_items?.title,
+  }));
+}

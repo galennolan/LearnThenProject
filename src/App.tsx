@@ -4,10 +4,9 @@ import { ToastProvider } from './hooks/useToast';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { LoginPage, RegisterPage } from './pages/Auth';
-import DashboardPage from './pages/Dashboard';
-import { LearningDetailPage, LearningFormPage, LearningListPage } from './pages/Learning';
-import { ProjectDetailPage, ProjectFormPage, ProjectListPage } from './pages/Projects';
-import PortfolioPage from './pages/Portfolio';
+import BelajarPage from './pages/Belajar';
+import HasilPage from './pages/Hasil';
+import { LearningDetailPage, LearningFormPage } from './pages/Learning';
 
 function Protected({ children }: { children: React.ReactNode }) {
   return (
@@ -25,16 +24,11 @@ export default function App() {
           <Routes>
             <Route path="/masuk" element={<LoginPage />} />
             <Route path="/daftar" element={<RegisterPage />} />
-            <Route path="/" element={<Protected><DashboardPage /></Protected>} />
-            <Route path="/materi" element={<Protected><LearningListPage /></Protected>} />
+            <Route path="/" element={<Protected><BelajarPage /></Protected>} />
             <Route path="/materi/baru" element={<Protected><LearningFormPage /></Protected>} />
             <Route path="/materi/:id" element={<Protected><LearningDetailPage /></Protected>} />
             <Route path="/materi/:id/ubah" element={<Protected><LearningFormPage /></Protected>} />
-            <Route path="/project" element={<Protected><ProjectListPage /></Protected>} />
-            <Route path="/project/baru" element={<Protected><ProjectFormPage /></Protected>} />
-            <Route path="/project/:id" element={<Protected><ProjectDetailPage /></Protected>} />
-            <Route path="/project/:id/ubah" element={<Protected><ProjectFormPage /></Protected>} />
-            <Route path="/portofolio" element={<Protected><PortfolioPage /></Protected>} />
+            <Route path="/hasil" element={<Protected><HasilPage /></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
