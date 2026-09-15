@@ -237,7 +237,7 @@ export async function produceContentFromLearning(learningItemId: string, input: 
   }
   return createOutput(projectId, {
     title: input.title,
-    output_type: input.platform === 'youtube' || input.platform === 'tiktok' ? 'video' : 'document',
+    output_type: input.platform === 'youtube' ? 'video' : 'document',
     platform: input.platform,
     url: input.url,
     description: input.description ?? null,
