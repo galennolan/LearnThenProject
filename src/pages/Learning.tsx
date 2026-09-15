@@ -1,16 +1,42 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import type { LearningItem, Output, SourceType } from '../types';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { LearningItem, LearningNote, Output, OutputPlatform, ProjectReview, SourceType } from '../types';
 import { PLATFORM_LABELS, SOURCE_TYPE_LABELS } from '../types';
-import { createLearningItem, deleteLearningItem, getLearningItem, getLearningNote, listContentForLearning, markLearned, produceContentFromLearning, saveLearningNote, updateLearningItem } from '../services/learning';
+import {
+  createLearningItem,
+  createLearningNote,
+  deleteLearningItem,
+  getLearningItem,
+  getReviewForLearning,
+  listContentForLearning,
+  listLearningNotes,
+  markLearned,
+  produceContentFromLearning,
+  saveReviewForLearning,
+  updateLearningItem,
+} from '../services/learning';
 import { isValidUrl } from '../lib/time';
 import { useToast } from '../hooks/useToast';
-import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Field, Loading, SecondaryButton, SelectInput, TextArea, TextInput } from '../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Field,
+  Loading,
+  SecondaryButton,
+  SelectInput,
+  TextArea,
+  TextInput,
+} from '../components/ui';
 
 const SOURCE_TYPES: SourceType[] = ['article', 'news', 'journal', 'youtube', 'documentation', 'book', 'google_doc', 'other'];
 
 export function LearningFormPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { push } = useToast();
@@ -18,12 +44,12 @@ export function LearningFormPage() {
   const [loading, setLoading] = useState(isEdit);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
-    title: '',
-    source_url: '',
-    source_type: 'article' as SourceType,
-    description: '',
-    topic: '',
-    learning_goal: '',
+    title: searchParams.get('title') ?? '',
+    source_url: searchParams.get('source_url') ?? '',
+    source_type: (searchParams.get('source_type') as SourceType) || 'article',
+    description: searchParams.get('description') ?? '',
+    topic: searchParams.get('topic') ?? '',
+    learning_goal: searchParams.get('goal') ?? '',
     status: 'new' as LearningItem['status'],
   });
 
@@ -89,7 +115,12 @@ export function LearningFormPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
-      <h1 className="text-xl font-bold text-slate-900">{isEdit ? 'Ubah Materi' : 'Materi Baru'}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-slate-900">{isEdit ? 'Ubah Materi' : 'Materi Baru'}</h1>
+        {searchParams.get('from_cycle') && (
+          <Badge>Materi Lanjutan</Badge>
+        )}
+      </div>
       <Card>
         <form onSubmit={submit} className="space-y-4">
           <Field label="Judul *">
@@ -119,11 +150,11 @@ export function LearningFormPage() {
           <Field label="Topik">
             <TextInput value={form.topic} onChange={(e) => set('topic', e.target.value)} placeholder="cth: Frontend" />
           </Field>
-          <Field label="Deskripsi">
-            <TextArea rows={3} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Ringkasan singkat materi..." />
+          <Field label="Deskripsi ringkas">
+            <TextArea rows={2} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="Ringkasan singkat materi..." />
           </Field>
-          <Field label="Tujuan belajar">
-            <TextArea rows={2} value={form.learning_goal} onChange={(e) => set('learning_goal', e.target.value)} placeholder="cth: Bisa menjelaskan caching ke orang lain" />
+          <Field label="Tujuan belajar / Target output">
+            <TextArea rows={2} value={form.learning_goal} onChange={(e) => set('learning_goal', e.target.value)} placeholder="cth: Membuat prototipe mini project dan artikel ringkasan" />
           </Field>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2">
@@ -150,17 +181,33 @@ export function LearningDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Catatan & Refleksi (multiple notes)
+  const [notes, setNotes] = useState<LearningNote[]>([]);
   const [note, setNote] = useState('');
+  const [criticalComment, setCriticalComment] = useState('');
+  const [ideas, setIdeas] = useState('');
+  const [questions, setQuestions] = useState('');
+  const [showNewNoteForm, setShowNewNoteForm] = useState(false);
+  const [showAdvancedReflection, setShowAdvancedReflection] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
   const [noteMsg, setNoteMsg] = useState('');
-  const [hasNote, setHasNote] = useState(false);
 
+  // Hasil karya / Output
   const [contents, setContents] = useState<Output[]>([]);
   const [cTitle, setCTitle] = useState('');
-  const [cPlatform, setCPlatform] = useState<Output['platform']>('news');
+  const [cPlatform, setCPlatform] = useState<OutputPlatform>('github');
   const [cUrl, setCUrl] = useState('');
   const [savingContent, setSavingContent] = useState(false);
   const [contentMsg, setContentMsg] = useState('');
+
+  // Review & Evaluasi
+  const [review, setReview] = useState<ProjectReview | null>(null);
+  const [whatWorked, setWhatWorked] = useState('');
+  const [whatFailed, setWhatFailed] = useState('');
+  const [keyInsight, setKeyInsight] = useState('');
+  const [nextStep, setNextStep] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
+  const [reviewMsg, setReviewMsg] = useState('');
 
   const load = async () => {
     if (!id) return;
@@ -169,12 +216,17 @@ export function LearningDetailPage() {
     try {
       const m = await getLearningItem(id);
       setItem(m);
-      const existing = await getLearningNote(id);
-      if (existing) {
-        setHasNote(true);
-        setNote(existing.understanding);
-      }
+      const existingNotes = await listLearningNotes(id);
+      setNotes(existingNotes);
       setContents(await listContentForLearning(id));
+      const rev = await getReviewForLearning(id);
+      if (rev) {
+        setReview(rev);
+        setWhatWorked(rev.what_worked ?? '');
+        setWhatFailed(rev.what_failed ?? '');
+        setKeyInsight(rev.key_insight ?? '');
+        setNextStep(rev.next_step ?? '');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat materi.');
     } finally {
@@ -191,14 +243,26 @@ export function LearningDetailPage() {
     if (!id) return;
     setNoteMsg('');
     if (note.trim().length < 100) {
-      setNoteMsg(`Catatan masih ${note.trim().length} karakter, minimal 100 karakter.`);
+      setNoteMsg(`Pemahaman masih ${note.trim().length} karakter, minimal 100 karakter.`);
       return;
     }
     setSavingNote(true);
     try {
-      await saveLearningNote(id, { understanding: note.trim() });
+      const created = await createLearningNote(id, {
+        understanding: note.trim(),
+        critical_comment: criticalComment.trim() || null,
+        ideas: ideas.trim() || null,
+        questions: questions.trim() || null,
+      });
+      setNotes((prev) => [...prev, created]);
       push('Catatan tersimpan.');
-      setHasNote(true);
+      // Reset form
+      setNote('');
+      setCriticalComment('');
+      setIdeas('');
+      setQuestions('');
+      setShowAdvancedReflection(false);
+      setShowNewNoteForm(false);
     } catch (e) {
       setNoteMsg(e instanceof Error ? e.message : 'Gagal menyimpan catatan.');
     } finally {
@@ -211,7 +275,7 @@ export function LearningDetailPage() {
     try {
       const updated = await markLearned(id);
       setItem(updated);
-      push('Materi ditandai sudah dipelajari.');
+      push('Materi ditandai selesai dipelajari.');
     } catch (e) {
       push(e instanceof Error ? e.message : 'Gagal memperbarui.', 'error');
     }
@@ -221,11 +285,11 @@ export function LearningDetailPage() {
     if (!id) return;
     setContentMsg('');
     if (!cTitle.trim()) {
-      setContentMsg('Judul konten wajib diisi.');
+      setContentMsg('Judul karya/konten wajib diisi.');
       return;
     }
     if (!isValidUrl(cUrl.trim())) {
-      setContentMsg('URL konten tidak valid. Gunakan http(s)://...');
+      setContentMsg('URL tidak valid. Gunakan http(s)://...');
       return;
     }
     setSavingContent(true);
@@ -244,11 +308,35 @@ export function LearningDetailPage() {
       }
       setCTitle('');
       setCUrl('');
-      push('Konten tersimpan. Link dicatat apa adanya (belum diverifikasi otomatis).');
+      push('Hasil karya tersimpan. Link dicatat apa adanya.');
     } catch (e) {
       setContentMsg(e instanceof Error ? e.message : 'Gagal menyimpan konten.');
     } finally {
       setSavingContent(false);
+    }
+  };
+
+  const handleSaveReview = async () => {
+    if (!id) return;
+    setReviewMsg('');
+    if (!keyInsight.trim() && !nextStep.trim() && !whatWorked.trim()) {
+      setReviewMsg('Isi setidaknya insight kunci atau rencana langkah berikutnya.');
+      return;
+    }
+    setSavingReview(true);
+    try {
+      const saved = await saveReviewForLearning(id, {
+        what_worked: whatWorked.trim() || null,
+        what_failed: whatFailed.trim() || null,
+        key_insight: keyInsight.trim() || null,
+        next_step: nextStep.trim() || null,
+      });
+      setReview(saved);
+      push('Review hasil belajar tersimpan.');
+    } catch (e) {
+      setReviewMsg(e instanceof Error ? e.message : 'Gagal menyimpan review.');
+    } finally {
+      setSavingReview(false);
     }
   };
 
@@ -258,7 +346,7 @@ export function LearningDetailPage() {
     try {
       await deleteLearningItem(id);
       push('Materi dihapus.');
-      navigate('/materi');
+      navigate('/');
     } catch (e) {
       push(e instanceof Error ? e.message : 'Gagal menghapus.', 'error');
       setDeleting(false);
@@ -272,16 +360,24 @@ export function LearningDetailPage() {
 
   const isLearned = item.status === 'learned';
   const hasContent = contents.length > 0;
+  const hasNote = notes.length > 0;
+  const hasReview = Boolean(review?.key_insight || review?.next_step || review?.what_worked);
   const steps = [
-    { label: 'Materi', done: true },
-    { label: 'Catatan', done: hasNote },
-    { label: 'Komplet', done: isLearned },
-    { label: 'Konten', done: hasContent },
+    { label: '1. Materi', done: true },
+    { label: '2. Catatan & Opini', done: hasNote },
+    { label: '3. Komplet', done: isLearned },
+    { label: '4. Karya/Output', done: hasContent },
+    { label: '5. Evaluasi & Lanjutan', done: hasReview },
   ];
   const progressPercent = Math.round((steps.filter((s) => s.done).length / steps.length) * 100);
 
+  const nextCycleUrl = `/materi/baru?from_cycle=true&topic=${encodeURIComponent(item.topic || '')}&title=${encodeURIComponent(
+    nextStep.trim() ? nextStep.trim() : `Proyek Lanjutan: ${item.title}`,
+  )}&goal=${encodeURIComponent(keyInsight.trim() ? `Menerapkan insight: ${keyInsight.trim()}` : '')}`;
+
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
+      {/* Header Materi */}
       <div className="flex items-start justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{item.title}</h1>
@@ -295,14 +391,23 @@ export function LearningDetailPage() {
         </Link>
       </div>
 
+      {/* 1. Stepper Progress Belajar-ke-Output */}
       <Card>
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-slate-900">Progress belajar</h2>
+          <div>
+            <h2 className="font-semibold text-slate-900">Siklus Learning-to-Output</h2>
+            <p className="text-xs text-slate-500">Alur tuntas dari eksplorasi sampai karya nyata</p>
+          </div>
           <Badge>{progressPercent}%</Badge>
         </div>
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className="mt-3 grid grid-cols-5 gap-1.5 sm:gap-2">
           {steps.map((s) => (
-            <div key={s.label} className={`rounded-lg px-2 py-2 text-center text-xs font-medium ${s.done ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
+            <div
+              key={s.label}
+              className={`rounded-lg p-1.5 text-center text-[11px] font-medium leading-tight sm:p-2 sm:text-xs ${
+                s.done ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'
+              }`}
+            >
               {s.done ? '✓ ' : ''}{s.label}
             </div>
           ))}
@@ -312,6 +417,7 @@ export function LearningDetailPage() {
         </div>
       </Card>
 
+      {/* Info Sumber Belajar */}
       <Card>
         <dl className="space-y-2 text-sm">
           {item.source_url && (
@@ -332,7 +438,7 @@ export function LearningDetailPage() {
           )}
           {item.learning_goal && (
             <div>
-              <dt className="font-medium text-slate-700">Tujuan belajar</dt>
+              <dt className="font-medium text-slate-700">Tujuan belajar / Target output</dt>
               <dd className="text-slate-600">{item.learning_goal}</dd>
             </div>
           )}
@@ -343,33 +449,137 @@ export function LearningDetailPage() {
           </Button>
         ) : (
           <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700">
-            Belajar selesai — tinggal produksi konten di bawah.
+            ✓ Belajar selesai — lanjut hasilkan karya atau konten di bawah.
           </p>
         )}
       </Card>
 
+      {/* 2. Catatan Pemahaman, Komentar Kritis & Ide (multiple notes) */}
       <Card>
-        <h2 className="font-semibold text-slate-900">Catatan</h2>
-        <p className="mt-1 text-xs text-slate-500">Tulis ulang dengan bahasamu sendiri. Minimal 100 karakter.</p>
-        <div className="mt-3 space-y-3">
-          <TextArea rows={6} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Apa inti materi ini? Apa yang masih membingungkan? Mau dipakai untuk apa?" />
-          <p className="text-xs text-slate-500">{note.trim().length}/100 karakter</p>
-          {noteMsg && <p className="text-sm text-red-600">{noteMsg}</p>}
-          <Button onClick={handleSaveNote} disabled={savingNote} className="w-full">
-            {savingNote ? 'Menyimpan...' : 'Simpan catatan'}
-          </Button>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">Catatan & Refleksi</h2>
+            <p className="text-xs text-slate-500">Tulis pemahaman dengan bahasamu sendiri (min. 100 karakter).</p>
+          </div>
+          {hasNote && <Badge>{notes.length} Catatan</Badge>}
         </div>
+
+        {/* Daftar catatan yang sudah tersimpan */}
+        {notes.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {notes.map((n, idx) => (
+              <div key={n.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="mb-1 text-xs font-semibold text-slate-500">Catatan {idx + 1}</p>
+                <p className="text-slate-800 whitespace-pre-wrap">{n.understanding}</p>
+                {n.critical_comment && (
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-slate-500">Komentar Kritis:</p>
+                    <p className="text-slate-700 whitespace-pre-wrap">{n.critical_comment}</p>
+                  </div>
+                )}
+                {n.ideas && (
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-slate-500">Ide Proyek:</p>
+                    <p className="text-slate-700 whitespace-pre-wrap">{n.ideas}</p>
+                  </div>
+                )}
+                {n.questions && (
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-slate-500">Pertanyaan Terbuka:</p>
+                    <p className="text-slate-700 whitespace-pre-wrap">{n.questions}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Form tambah catatan baru */}
+        {showNewNoteForm ? (
+          <div className="mt-3 space-y-3 rounded-lg border border-slate-200 p-3">
+            <p className="text-xs font-semibold text-slate-700">Catatan {notes.length + 1}</p>
+            <Field label="Pemahaman Inti *">
+              <TextArea
+                rows={5}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Apa inti materi ini? Konsep apa yang paling penting untuk diingat dan diterapkan?"
+              />
+              <p className="mt-1 text-xs text-slate-500">{note.trim().length}/100 karakter minimum</p>
+            </Field>
+
+            <button
+              type="button"
+              onClick={() => setShowAdvancedReflection(!showAdvancedReflection)}
+              className="text-xs font-medium text-slate-600 underline"
+            >
+              {showAdvancedReflection ? '− Sembunyikan refleksi tambahan' : '+ Tambah komentar kritis, ide proyek, atau pertanyaan'}
+            </button>
+
+            {showAdvancedReflection && (
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <Field label="Komentar Kritis / Opini Pribadi" hint="Apakah ada kelemahan pendekatan ini?">
+                  <TextArea
+                    rows={2}
+                    value={criticalComment}
+                    onChange={(e) => setCriticalComment(e.target.value)}
+                    placeholder="cth: Pendekatan ini bagus untuk dataset kecil, tetapi kurang optimal jika konkurensi tinggi..."
+                  />
+                </Field>
+                <Field label="Ide Proyek / Bentuk Karya Nyata" hint="Mini project apa yang bisa dibuat?">
+                  <TextArea
+                    rows={2}
+                    value={ideas}
+                    onChange={(e) => setIdeas(e.target.value)}
+                    placeholder="cth: Buat Colab notebook membandingkan BM25 vs Dense Retrieval..."
+                  />
+                </Field>
+                <Field label="Pertanyaan Terbuka / Yang Masih Membingungkan" hint="Hal yang perlu dieksplorasi lebih lanjut">
+                  <TextArea
+                    rows={2}
+                    value={questions}
+                    onChange={(e) => setQuestions(e.target.value)}
+                    placeholder="cth: Bagaimana strategi re-ranking yang paling hemat latensi?"
+                  />
+                </Field>
+              </div>
+            )}
+
+            {noteMsg && <p className="text-sm text-red-600">{noteMsg}</p>}
+            <div className="flex gap-2">
+              <SecondaryButton
+                type="button"
+                onClick={() => { setShowNewNoteForm(false); setNote(''); setCriticalComment(''); setIdeas(''); setQuestions(''); setNoteMsg(''); setShowAdvancedReflection(false); }}
+                className="flex-1"
+              >
+                Batal
+              </SecondaryButton>
+              <Button onClick={handleSaveNote} disabled={savingNote} className="flex-1">
+                {savingNote ? 'Menyimpan...' : 'Simpan catatan'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowNewNoteForm(true)}
+            className="mt-3 w-full rounded-lg border border-dashed border-slate-300 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-400 hover:text-slate-900"
+          >
+            + Tambah catatan {notes.length > 0 ? notes.length + 1 : ''}
+          </button>
+        )}
       </Card>
 
+      {/* 3. Hasil Karya / Output (GitHub, Colab, YouTube, Blog, dll) */}
       <Card>
-        <h2 className="font-semibold text-slate-900">Hasil</h2>
+        <h2 className="font-semibold text-slate-900">Hasil Karya / Output Nyata</h2>
         {!isLearned ? (
           <p className="mt-1 text-xs text-slate-500">
-            Selesaikan belajar dulu (tombol di atas), lalu ubah pemahamanmu jadi konten.
+            Selesaikan belajar dulu di atas, lalu ubah pemahamanmu menjadi karya nyata (kode, Colab, video, artikel).
           </p>
         ) : (
           <p className="mt-1 text-xs text-slate-500">
-            Belajar komplet — pilih platform, tempel link karyamu.
+            Pilih platform tempat karyamu diunggah, lalu simpan link buktinya.
           </p>
         )}
 
@@ -379,12 +589,12 @@ export function LearningDetailPage() {
               <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 p-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-900">{c.title}</p>
-                  <p className="text-xs text-slate-500">{PLATFORM_LABELS[c.platform]}</p>
+                  <p className="text-xs text-slate-500">{PLATFORM_LABELS[c.platform] ?? c.platform}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {c.is_primary && <Badge>Utama</Badge>}
                   <a href={c.url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-700 underline">
-                    Buka
+                    Buka Link
                   </a>
                 </div>
               </div>
@@ -393,13 +603,15 @@ export function LearningDetailPage() {
         )}
 
         <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3">
-          <div className="grid grid-cols-3 gap-2">
-            {(['news', 'instagram', 'youtube', 'tiktok', 'blog', 'linkedin'] as Output['platform'][]).map((p) => (
+          <div className="flex flex-wrap gap-1.5">
+            {(Object.keys(PLATFORM_LABELS) as OutputPlatform[]).map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setCPlatform(p)}
-                className={`rounded-lg border px-2 py-2 text-xs font-medium ${cPlatform === p ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600'}`}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+                  cPlatform === p ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400'
+                }`}
               >
                 {PLATFORM_LABELS[p]}
               </button>
@@ -407,33 +619,109 @@ export function LearningDetailPage() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Platform">
-              <SelectInput value={cPlatform} onChange={(e) => setCPlatform(e.target.value as Output['platform'])}>
-                {(Object.keys(PLATFORM_LABELS) as Output['platform'][]).map((p) => (
-                  <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
+              <SelectInput value={cPlatform} onChange={(e) => setCPlatform(e.target.value as OutputPlatform)}>
+                {(Object.keys(PLATFORM_LABELS) as OutputPlatform[]).map((p) => (
+                  <option key={p} value={p}>
+                    {PLATFORM_LABELS[p]}
+                  </option>
                 ))}
               </SelectInput>
             </Field>
-            <Field label="Judul konten *">
-              <TextInput value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="cth: Utas ringkasanku" />
+            <Field label="Judul karya / konten *">
+              <TextInput value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="cth: Mini Project RAG Hybrid di Colab" />
             </Field>
           </div>
-          <Field label="Link konten *">
-            <TextInput value={cUrl} onChange={(e) => setCUrl(e.target.value)} placeholder="https://..." inputMode="url" />
+          <Field label="Link karya / hasil *">
+            <TextInput value={cUrl} onChange={(e) => setCUrl(e.target.value)} placeholder="https://github.com/... atau https://colab.research..." inputMode="url" />
           </Field>
           {contentMsg && <p className="text-sm text-red-600">{contentMsg}</p>}
           <Button onClick={handleProduceContent} disabled={savingContent} className="w-full">
-            {savingContent ? 'Menyimpan...' : 'Simpan konten'}
+            {savingContent ? 'Menyimpan...' : 'Simpan hasil karya'}
           </Button>
         </div>
       </Card>
 
-      <button onClick={() => setConfirmDelete(true)} className="text-sm font-medium text-red-600 underline">
-        Hapus materi ini
-      </button>
+      {/* 4. Evaluasi & Review Hasil Karya (Closing the Loop) */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-900">Evaluasi & Review Hasil</h2>
+            <p className="text-xs text-slate-500">Kunci flywheel: petik insight dan tentukan proyek berikutnya.</p>
+          </div>
+          {hasReview && <Badge>Terekam</Badge>}
+        </div>
+
+        <div className="mt-3 space-y-3">
+          <Field label="Insight Kunci yang Dipetik" hint="Apa pembelajaran terpenting setelah mengerjakan dan merilis karya ini?">
+            <TextArea
+              rows={2}
+              value={keyInsight}
+              onChange={(e) => setKeyInsight(e.target.value)}
+              placeholder="cth: Hybrid retrieval meningkatkan akurasi context retrieval sebesar 30% dibanding keyword search biasa."
+            />
+          </Field>
+          <Field label="Rencana Langkah / Proyek Berikutnya" hint="Apa topik atau karya berikutnya yang logis untuk dikerjakan?">
+            <TextInput
+              value={nextStep}
+              onChange={(e) => setNextStep(e.target.value)}
+              placeholder="cth: Bereksperimen dengan reranker Cohere atau ColBERT"
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Apa yang berhasil berjalan baik? (Opsional)">
+              <TextArea
+                rows={2}
+                value={whatWorked}
+                onChange={(e) => setWhatWorked(e.target.value)}
+                placeholder="cth: Integrasi vector DB cepat dan lancar..."
+              />
+            </Field>
+            <Field label="Kendala / yang masih kurang? (Opsional)">
+              <TextArea
+                rows={2}
+                value={whatFailed}
+                onChange={(e) => setWhatFailed(e.target.value)}
+                placeholder="cth: Latensi agak lambat saat embedding dokumen panjang..."
+              />
+            </Field>
+          </div>
+
+          {reviewMsg && <p className="text-sm text-red-600">{reviewMsg}</p>}
+          <Button onClick={handleSaveReview} disabled={savingReview} className="w-full">
+            {savingReview ? 'Menyimpan...' : 'Simpan evaluasi & review'}
+          </Button>
+        </div>
+      </Card>
+
+      {/* 5. Flywheel: Lanjutkan ke Proyek/Materi Berikutnya */}
+      {(hasReview || hasContent) && (
+        <Card className="border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-slate-50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Flywheel Learning-to-Output</p>
+              <h3 className="font-bold text-slate-900">Siap melangkah ke materi berikutnya?</h3>
+              <p className="text-xs text-slate-600">
+                {nextStep.trim() ? `Langkah berikutnya: "${nextStep.trim()}"` : 'Jadikan insight materi ini sebagai dasar proyek baru.'}
+              </p>
+            </div>
+            <Link to={nextCycleUrl} className="shrink-0">
+              <Button>+ Mulai Materi Berikutnya</Button>
+            </Link>
+          </div>
+        </Card>
+      )}
+
+      {/* Hapus Materi */}
+      <div className="pt-2 text-right">
+        <button onClick={() => setConfirmDelete(true)} className="text-sm font-medium text-red-600 hover:text-red-700 underline">
+          Hapus materi ini
+        </button>
+      </div>
+
       {confirmDelete && (
         <ConfirmDialog
           title="Hapus materi?"
-          message="Materi, refleksi, dan relasinya akan ikut terhapus. Lanjutkan?"
+          message="Materi, catatan, karya terkait, dan review akan ikut terhapus. Lanjutkan?"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={handleDelete}
           busy={deleting}
@@ -442,3 +730,4 @@ export function LearningDetailPage() {
     </div>
   );
 }
+

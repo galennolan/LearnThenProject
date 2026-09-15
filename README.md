@@ -95,15 +95,18 @@ Cara menerapkan: **Supabase Dashboard → SQL Editor → New query** → paste s
 ## Konfigurasi Environment
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # lalu isi nilai ASLI hanya di file .env lokal
 ```
 
-| Variabel | Contoh | Keterangan |
+| Variabel | Diisi dengan | Diambil dari |
 |---|---|---|
-| `VITE_SUPABASE_URL` | `https://xyzcompany.supabase.co` | Supabase → Project Settings → API |
-| `VITE_SUPABASE_ANON_KEY` | `eyJhbGciOi...` | **anon public key** — bukan `service_role` |
+| `VITE_SUPABASE_URL` | `<PROJECT-URL-SUPABASE>` | Supabase → Project Settings → API |
+| `VITE_SUPABASE_ANON_KEY` | `<ANON-KEY-SUPABASE>` | **anon public key** — bukan `service_role` |
 
-> `service_role` key tidak pernah dipakai di project ini. Nilai `VITE_*` ikut terkirim ke browser, jadi perlakukan anon key sebagaimana mestinya.
+> **Aturan keamanan:**
+> - Nilai asli hanya boleh ada di file `.env` lokal dan di dashboard Cloudflare — **jangan pernah** menempel kunci asli ke README, kode, atau commit Git mana pun.
+> - File `.env` sudah masuk `.gitignore` dan tidak terlacak Git; yang boleh di-commit hanya `.env.example` (berisi placeholder seperti di atas).
+> - `service_role` key tidak pernah dipakai di project ini. Nilai `VITE_*` ikut terkirim ke browser, jadi perlakukan anon key sebagaimana mestinya.
 
 ---
 

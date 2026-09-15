@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import type { LearningItem, LearningNote, LearningStatus, Output, Project } from '../types';
+import type { LearningItem, LearningNote, LearningStatus, Output, Project, ProjectReview } from '../types';
 import { createOutput, createProject } from './projects';
 
 export interface LearningItemInput {
@@ -55,37 +55,36 @@ export async function deleteLearningItem(id: string) {
   if (error) throw new Error(error.message);
 }
 
+export async function listLearningNotes(learningItemId: string): Promise<LearningNote[]> {
+  const { data, error } = await supabase
+    .from('learning_notes')
+    .select('*')
+    .eq('learning_item_id', learningItemId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as LearningNote[];
+}
+
 export async function getLearningNote(learningItemId: string) {
   const { data, error } = await supabase
     .from('learning_notes')
     .select('*')
     .eq('learning_item_id', learningItemId)
-    .order('updated_at', { ascending: false })
+    .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(error.message);
   return (data ?? null) as LearningNote | null;
 }
 
-export async function saveLearningNote(
+export async function createLearningNote(
   learningItemId: string,
   input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null },
-) {
+): Promise<LearningNote> {
   if (input.understanding.trim().length < 100) {
     throw new Error('Pemahaman minimal 100 karakter.');
   }
   const { data: auth } = await supabase.auth.getUser();
-  const existing = await getLearningNote(learningItemId);
-  if (existing) {
-    const { data, error } = await supabase
-      .from('learning_notes')
-      .update({ ...input })
-      .eq('id', existing.id)
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return data as LearningNote;
-  }
   const { data, error } = await supabase
     .from('learning_notes')
     .insert({ ...input, learning_item_id: learningItemId, user_id: auth.user!.id })
@@ -93,6 +92,35 @@ export async function saveLearningNote(
     .single();
   if (error) throw new Error(error.message);
   return data as LearningNote;
+}
+
+export async function updateLearningNote(
+  noteId: string,
+  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null },
+): Promise<LearningNote> {
+  if (input.understanding.trim().length < 100) {
+    throw new Error('Pemahaman minimal 100 karakter.');
+  }
+  const { data, error } = await supabase
+    .from('learning_notes')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', noteId)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as LearningNote;
+}
+
+export async function deleteLearningNote(noteId: string): Promise<void> {
+  const { error } = await supabase.from('learning_notes').delete().eq('id', noteId);
+  if (error) throw new Error(error.message);
+}
+
+export async function saveLearningNote(
+  learningItemId: string,
+  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null },
+) {
+  return createLearningNote(learningItemId, input);
 }
 
 export async function markLearned(id: string) {
@@ -106,6 +134,7 @@ export interface LearningFocus {
   hasReflection: boolean;
   isLearned: boolean;
   outputCount: number;
+  hasReview: boolean;
   percent: number;
   nextAction: string;
 }
@@ -115,34 +144,40 @@ function buildFocus(
   notedIds: Set<string>,
   projectIdsByLearning: Map<string, string[]>,
   outputCountByProject: Map<string, number>,
+  reviewedProjectIds: Set<string>,
 ): LearningFocus {
   const hasReflection = notedIds.has(item.id);
   const isLearned = item.status === 'learned';
   const projectIds = projectIdsByLearning.get(item.id) ?? [];
   const outputCount = projectIds.reduce((n, pid) => n + (outputCountByProject.get(pid) ?? 0), 0);
-  const steps = [true, hasReflection, isLearned, outputCount > 0];
+  const hasReview = projectIds.some((pid) => reviewedProjectIds.has(pid));
+  const steps = [true, hasReflection, isLearned, outputCount > 0, hasReview];
   const percent = Math.round((steps.filter(Boolean).length / steps.length) * 100);
   const nextAction = !hasReflection
-    ? 'Tulis catatan belajar'
+    ? 'Tulis catatan & refleksi'
     : !isLearned
-      ? 'Tandai belajar komplet'
+      ? 'Tandai belajar selesai'
       : outputCount === 0
-        ? 'Produksi konten pertama'
-        : 'Komplet — lihat portofolio';
-  return { item, hasReflection, isLearned, outputCount, percent, nextAction };
+        ? 'Produksi karya/konten pertama'
+        : !hasReview
+          ? 'Tulis evaluasi & review hasil'
+          : 'Siklus tuntas — lanjut materi berikutnya';
+  return { item, hasReflection, isLearned, outputCount, hasReview, percent, nextAction };
 }
 
 export async function listLearningFocus(): Promise<LearningFocus[]> {
-  const [itemsRes, notesRes, projectsRes, outputsRes] = await Promise.all([
+  const [itemsRes, notesRes, projectsRes, outputsRes, reviewsRes] = await Promise.all([
     supabase.from('learning_items').select('*').order('created_at', { ascending: false }),
     supabase.from('learning_notes').select('learning_item_id'),
     supabase.from('projects').select('id,learning_item_id'),
     supabase.from('outputs').select('id,project_id'),
+    supabase.from('project_reviews').select('project_id'),
   ]);
   if (itemsRes.error) throw new Error(itemsRes.error.message);
   if (notesRes.error) throw new Error(notesRes.error.message);
   if (projectsRes.error) throw new Error(projectsRes.error.message);
   if (outputsRes.error) throw new Error(outputsRes.error.message);
+  if (reviewsRes.error) throw new Error(reviewsRes.error.message);
 
   const notedIds = new Set((notesRes.data ?? []).map((n: { learning_item_id: string }) => n.learning_item_id));
   const projectIdsByLearning = new Map<string, string[]>();
@@ -154,8 +189,11 @@ export async function listLearningFocus(): Promise<LearningFocus[]> {
   for (const o of (outputsRes.data ?? []) as { id: string; project_id: string }[]) {
     outputCountByProject.set(o.project_id, (outputCountByProject.get(o.project_id) ?? 0) + 1);
   }
+  const reviewedProjectIds = new Set(
+    (reviewsRes.data ?? []).map((r: { project_id: string }) => r.project_id),
+  );
   return ((itemsRes.data ?? []) as LearningItem[]).map((item) =>
-    buildFocus(item, notedIds, projectIdsByLearning, outputCountByProject),
+    buildFocus(item, notedIds, projectIdsByLearning, outputCountByProject, reviewedProjectIds),
   );
 }
 
@@ -170,8 +208,8 @@ export interface ProduceContentInput {
 }
 
 function projectTypeFor(platform: Output['platform']): Project['project_type'] {
-  if (platform === 'youtube' || platform === 'tiktok') return 'video';
-  if (platform === 'news' || platform === 'blog' || platform === 'website') return 'article';
+  if (platform === 'youtube') return 'video';
+  if (platform === 'blog') return 'article';
   return 'other';
 }
 
@@ -226,20 +264,103 @@ export async function listContentForLearning(learningItemId: string) {
   return data as Output[];
 }
 
-export interface ContentWithSource extends Output {
-  learning_title?: string;
+export async function getProjectForLearning(learningItemId: string): Promise<Project | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('learning_item_id', learningItemId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data ?? null) as Project | null;
 }
 
-/** Semua hasil milik user + judul materi sumbernya. */
+export async function getReviewForLearning(learningItemId: string): Promise<ProjectReview | null> {
+  const project = await getProjectForLearning(learningItemId);
+  if (!project) return null;
+  const { data, error } = await supabase
+    .from('project_reviews')
+    .select('*')
+    .eq('project_id', project.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data ?? null) as ProjectReview | null;
+}
+
+export async function saveReviewForLearning(
+  learningItemId: string,
+  input: { what_worked?: string | null; what_failed?: string | null; key_insight?: string | null; next_step?: string | null },
+): Promise<ProjectReview> {
+  const { data: auth } = await supabase.auth.getUser();
+  let project = await getProjectForLearning(learningItemId);
+  if (!project) {
+    const item = await getLearningItem(learningItemId);
+    project = await createProject({
+      title: `Proyek: ${item.title}`,
+      description: item.learning_goal,
+      project_type: 'other',
+      status: 'active',
+      priority: 'medium',
+      learning_item_id: learningItemId,
+    });
+  }
+  const existing = await getReviewForLearning(learningItemId);
+  if (existing) {
+    const { data, error } = await supabase
+      .from('project_reviews')
+      .update(input)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data as ProjectReview;
+  }
+  const { data, error } = await supabase
+    .from('project_reviews')
+    .insert({ ...input, project_id: project.id, user_id: auth.user!.id })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ProjectReview;
+}
+
+export interface ContentWithSource extends Output {
+  learning_title?: string;
+  learning_item_id?: string;
+  key_insight?: string | null;
+  next_step?: string | null;
+}
+
+/** Semua hasil milik user + judul materi sumbernya + insight review jika ada. */
 export async function listAllContent(): Promise<ContentWithSource[]> {
   const { data, error } = await supabase
     .from('outputs')
-    .select('*, projects(title, learning_items(title))')
+    .select('*, projects(title, learning_item_id, learning_items(title), project_reviews(key_insight, next_step))')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as Array<Record<string, unknown>>).map((o) => ({
-    ...(o as unknown as Output),
-    learning_title: (o['projects'] as { learning_items?: { title?: string } | null } | null)
-      ?.learning_items?.title,
-  }));
+  return ((data ?? []) as Array<Record<string, unknown>>).map((o) => {
+    const project = o['projects'] as
+      | {
+          title?: string;
+          learning_item_id?: string;
+          learning_items?: { title?: string } | null;
+          project_reviews?:
+            | { key_insight?: string | null; next_step?: string | null }
+            | { key_insight?: string | null; next_step?: string | null }[]
+            | null;
+        }
+      | null
+      | undefined;
+    const reviews = project?.project_reviews;
+    const review = Array.isArray(reviews) ? reviews[0] : reviews;
+    return {
+      ...(o as unknown as Output),
+      learning_title: project?.learning_items?.title,
+      learning_item_id: project?.learning_item_id,
+      key_insight: review?.key_insight ?? null,
+      next_step: review?.next_step ?? null,
+    };
+  });
 }
+

@@ -37,17 +37,10 @@ export type OutputType =
 
 export type OutputPlatform =
   | 'github'
-  | 'gitlab'
   | 'google_colab'
   | 'google_docs'
-  | 'notion'
   | 'youtube'
-  | 'tiktok'
   | 'instagram'
-  | 'linkedin'
-  | 'journal'
-  | 'website'
-  | 'news'
   | 'blog'
   | 'other';
 
@@ -169,17 +162,10 @@ export const OUTPUT_TYPE_LABELS: Record<OutputType, string> = {
 
 export const PLATFORM_LABELS: Record<OutputPlatform, string> = {
   github: 'GitHub',
-  gitlab: 'GitLab',
   google_colab: 'Google Colab',
   google_docs: 'Google Docs',
-  notion: 'Notion',
   youtube: 'YouTube',
-  tiktok: 'TikTok',
   instagram: 'Instagram',
-  linkedin: 'LinkedIn',
-  journal: 'Jurnal',
-  website: 'Website',
-  news: 'Berita',
-  blog: 'Blog',
+  blog: 'Blog / Artikel',
   other: 'Lainnya',
 };
