@@ -171,6 +171,61 @@ export function LearningFormPage() {
   );
 }
 
+function buildNoteText(n: import('../types').LearningNote): string {
+  const parts = [`[Pemahaman]\n${n.understanding}`];
+  if (n.critical_comment) parts.push(`[Komentar Kritis]\n${n.critical_comment}`);
+  if (n.ideas) parts.push(`[Ide Proyek]\n${n.ideas}`);
+  if (n.questions) parts.push(`[Pertanyaan Terbuka]\n${n.questions}`);
+  return parts.join('\n\n');
+}
+
+function NoteCard({ note: n, index: idx }: { note: import('../types').LearningNote; index: number }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(buildNoteText(n)).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-500">Catatan {idx + 1}</p>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className={`rounded px-2 py-0.5 text-xs font-medium transition ${
+            copied ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+          }`}
+        >
+          {copied ? '✓ Disalin!' : 'Salin'}
+        </button>
+      </div>
+      <p className="text-slate-800 whitespace-pre-wrap">{n.understanding}</p>
+      {n.critical_comment && (
+        <div className="mt-2">
+          <p className="text-xs font-medium text-slate-500">Komentar Kritis:</p>
+          <p className="text-slate-700 whitespace-pre-wrap">{n.critical_comment}</p>
+        </div>
+      )}
+      {n.ideas && (
+        <div className="mt-2">
+          <p className="text-xs font-medium text-slate-500">Ide Proyek:</p>
+          <p className="text-slate-700 whitespace-pre-wrap">{n.ideas}</p>
+        </div>
+      )}
+      {n.questions && (
+        <div className="mt-2">
+          <p className="text-xs font-medium text-slate-500">Pertanyaan Terbuka:</p>
+          <p className="text-slate-700 whitespace-pre-wrap">{n.questions}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LearningDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -206,6 +261,7 @@ export function LearningDetailPage() {
   const [whatFailed, setWhatFailed] = useState('');
   const [keyInsight, setKeyInsight] = useState('');
   const [nextStep, setNextStep] = useState('');
+  const [showReviewDetail, setShowReviewDetail] = useState(false);
   const [savingReview, setSavingReview] = useState(false);
   const [reviewMsg, setReviewMsg] = useState('');
 
@@ -226,6 +282,7 @@ export function LearningDetailPage() {
         setWhatFailed(rev.what_failed ?? '');
         setKeyInsight(rev.key_insight ?? '');
         setNextStep(rev.next_step ?? '');
+        if (rev.what_worked || rev.what_failed) setShowReviewDetail(true);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat materi.');
@@ -468,28 +525,7 @@ export function LearningDetailPage() {
         {notes.length > 0 && (
           <div className="mt-3 space-y-2">
             {notes.map((n, idx) => (
-              <div key={n.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                <p className="mb-1 text-xs font-semibold text-slate-500">Catatan {idx + 1}</p>
-                <p className="text-slate-800 whitespace-pre-wrap">{n.understanding}</p>
-                {n.critical_comment && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium text-slate-500">Komentar Kritis:</p>
-                    <p className="text-slate-700 whitespace-pre-wrap">{n.critical_comment}</p>
-                  </div>
-                )}
-                {n.ideas && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium text-slate-500">Ide Proyek:</p>
-                    <p className="text-slate-700 whitespace-pre-wrap">{n.ideas}</p>
-                  </div>
-                )}
-                {n.questions && (
-                  <div className="mt-2">
-                    <p className="text-xs font-medium text-slate-500">Pertanyaan Terbuka:</p>
-                    <p className="text-slate-700 whitespace-pre-wrap">{n.questions}</p>
-                  </div>
-                )}
-              </div>
+              <NoteCard key={n.id} note={n} index={idx} />
             ))}
           </div>
         )}
@@ -646,49 +682,60 @@ export function LearningDetailPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-slate-900">Evaluasi & Review Hasil</h2>
-            <p className="text-xs text-slate-500">Kunci flywheel: petik insight dan tentukan proyek berikutnya.</p>
+            <p className="text-xs text-slate-500">Petik insight dan tentukan langkah berikutnya.</p>
           </div>
           {hasReview && <Badge>Terekam</Badge>}
         </div>
 
         <div className="mt-3 space-y-3">
-          <Field label="Insight Kunci yang Dipetik" hint="Apa pembelajaran terpenting setelah mengerjakan dan merilis karya ini?">
+          <Field label="Insight kunci">
             <TextArea
               rows={2}
               value={keyInsight}
               onChange={(e) => setKeyInsight(e.target.value)}
-              placeholder="cth: Hybrid retrieval meningkatkan akurasi context retrieval sebesar 30% dibanding keyword search biasa."
+              placeholder="Apa yang paling kamu pelajari setelah mengerjakan karya ini?"
             />
           </Field>
-          <Field label="Rencana Langkah / Proyek Berikutnya" hint="Apa topik atau karya berikutnya yang logis untuk dikerjakan?">
+          <Field label="Langkah berikutnya">
             <TextInput
               value={nextStep}
               onChange={(e) => setNextStep(e.target.value)}
-              placeholder="cth: Bereksperimen dengan reranker Cohere atau ColBERT"
+              placeholder="Topik atau proyek apa yang logis dikerjakan berikutnya?"
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Apa yang berhasil berjalan baik? (Opsional)">
-              <TextArea
-                rows={2}
-                value={whatWorked}
-                onChange={(e) => setWhatWorked(e.target.value)}
-                placeholder="cth: Integrasi vector DB cepat dan lancar..."
-              />
-            </Field>
-            <Field label="Kendala / yang masih kurang? (Opsional)">
-              <TextArea
-                rows={2}
-                value={whatFailed}
-                onChange={(e) => setWhatFailed(e.target.value)}
-                placeholder="cth: Latensi agak lambat saat embedding dokumen panjang..."
-              />
-            </Field>
-          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowReviewDetail(!showReviewDetail)}
+            className="text-xs font-medium text-slate-500 underline"
+          >
+            {showReviewDetail ? '− Sembunyikan detail' : '+ Tambah detail (apa yang berhasil & kendala)'}
+          </button>
+
+          {showReviewDetail && (
+            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <Field label="Apa yang berjalan baik? (opsional)">
+                <TextArea
+                  rows={2}
+                  value={whatWorked}
+                  onChange={(e) => setWhatWorked(e.target.value)}
+                  placeholder="cth: Integrasi vector DB cepat dan lancar..."
+                />
+              </Field>
+              <Field label="Kendala / yang masih kurang? (opsional)">
+                <TextArea
+                  rows={2}
+                  value={whatFailed}
+                  onChange={(e) => setWhatFailed(e.target.value)}
+                  placeholder="cth: Latensi agak lambat saat embedding dokumen panjang..."
+                />
+              </Field>
+            </div>
+          )}
 
           {reviewMsg && <p className="text-sm text-red-600">{reviewMsg}</p>}
           <Button onClick={handleSaveReview} disabled={savingReview} className="w-full">
-            {savingReview ? 'Menyimpan...' : 'Simpan evaluasi & review'}
+            {savingReview ? 'Menyimpan...' : 'Simpan evaluasi'}
           </Button>
         </div>
       </Card>
