@@ -368,6 +368,9 @@ export async function listAllContent(): Promise<ContentWithSource[]> {
 export interface ActivityDay {
   date: string; // YYYY-MM-DD (Asia/Jakarta)
   count: number;
+  materi: number;
+  catatan: number;
+  konten: number;
 }
 
 export interface ActivitySummary {
@@ -404,14 +407,16 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   const notes = (notesRes.data ?? []) as { created_at: string }[];
   const outputs = (outputsRes.data ?? []) as { created_at: string }[];
 
-  const counts = new Map<string, number>();
-  const bump = (iso: string) => {
+  const counts = new Map<string, { m: number; c: number; k: number }>();
+  const bump = (iso: string, kind: 'm' | 'c' | 'k') => {
     const key = jakartaDayKey(iso);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const cur = counts.get(key) ?? { m: 0, c: 0, k: 0 };
+    cur[kind]++;
+    counts.set(key, cur);
   };
-  items.forEach((r) => bump(r.created_at));
-  notes.forEach((r) => bump(r.created_at));
-  outputs.forEach((r) => bump(r.created_at));
+  items.forEach((r) => bump(r.created_at, 'm'));
+  notes.forEach((r) => bump(r.created_at, 'c'));
+  outputs.forEach((r) => bump(r.created_at, 'k'));
 
   const todayKey = jakartaDayKey(new Date().toISOString());
   const start = new Date(`${todayKey}T00:00:00Z`);
@@ -422,7 +427,8 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   const cursor = new Date(start);
   for (;;) {
     const key = cursor.toISOString().slice(0, 10);
-    days.push({ date: key, count: counts.get(key) ?? 0 });
+    const b = counts.get(key) ?? { m: 0, c: 0, k: 0 };
+    days.push({ date: key, count: b.m + b.c + b.k, materi: b.m, catatan: b.c, konten: b.k });
     if (key >= todayKey) break;
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
@@ -433,14 +439,15 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
     else break;
   }
 
+  const sum = (f: (d: ActivityDay) => number) => days.reduce((n, d) => n + f(d), 0);
   return {
     days,
-    total: items.length + notes.length + outputs.length,
+    total: sum((d) => d.count),
     activeDays: days.filter((d) => d.count > 0).length,
     streak,
-    materi: items.length,
-    catatan: notes.length,
-    konten: outputs.length,
+    materi: sum((d) => d.materi),
+    catatan: sum((d) => d.catatan),
+    konten: sum((d) => d.konten),
   };
 }
 
