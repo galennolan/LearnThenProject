@@ -23,7 +23,7 @@ export default function JejakPage() {
     setLoading(true);
     setError('');
     try {
-      setData(await getActivity(53));
+      setData(await getActivity(26));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Gagal memuat jejak.');
     } finally {
@@ -64,7 +64,7 @@ export default function JejakPage() {
     <div className="mx-auto w-full max-w-2xl space-y-4">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Jejak belajarmu</h1>
-        <p className="text-sm text-slate-500">12 bulan terakhir. Satu kotak satu hari — makin hijau, makin produktif.</p>
+        <p className="text-sm text-slate-500">6 bulan terakhir. Satu kotak satu hari — makin hijau, makin produktif.</p>
       </div>
 
       <Card>
