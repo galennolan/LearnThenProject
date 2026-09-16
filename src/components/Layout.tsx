@@ -27,6 +27,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/hasil" className={linkCls}>
               Hasil
             </NavLink>
+            <NavLink to="/jejak" className={linkCls}>
+              Jejak
+            </NavLink>
           </nav>
           <div className="flex items-center gap-2">
             <span className="hidden max-w-40 truncate text-xs text-slate-500 sm:block">{user?.email}</span>

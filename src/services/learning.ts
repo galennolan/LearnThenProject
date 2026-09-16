@@ -364,3 +364,83 @@ export async function listAllContent(): Promise<ContentWithSource[]> {
   });
 }
 
+// ---------- Jejak aktivitas (heatmap ala GitHub) ----------
+export interface ActivityDay {
+  date: string; // YYYY-MM-DD (Asia/Jakarta)
+  count: number;
+}
+
+export interface ActivitySummary {
+  days: ActivityDay[];
+  total: number;
+  activeDays: number;
+  streak: number;
+  materi: number;
+  catatan: number;
+  konten: number;
+}
+
+function jakartaDayKey(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(iso));
+}
+
+/** Aktivitas harian dari materi + catatan + konten, diratakan ke hari Senin. */
+export async function getActivity(weeks = 16): Promise<ActivitySummary> {
+  const [itemsRes, notesRes, outputsRes] = await Promise.all([
+    supabase.from('learning_items').select('created_at'),
+    supabase.from('learning_notes').select('created_at'),
+    supabase.from('outputs').select('created_at'),
+  ]);
+  if (itemsRes.error) throw new Error(itemsRes.error.message);
+  if (notesRes.error) throw new Error(notesRes.error.message);
+  if (outputsRes.error) throw new Error(outputsRes.error.message);
+
+  const items = (itemsRes.data ?? []) as { created_at: string }[];
+  const notes = (notesRes.data ?? []) as { created_at: string }[];
+  const outputs = (outputsRes.data ?? []) as { created_at: string }[];
+
+  const counts = new Map<string, number>();
+  const bump = (iso: string) => {
+    const key = jakartaDayKey(iso);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  };
+  items.forEach((r) => bump(r.created_at));
+  notes.forEach((r) => bump(r.created_at));
+  outputs.forEach((r) => bump(r.created_at));
+
+  const todayKey = jakartaDayKey(new Date().toISOString());
+  const start = new Date(`${todayKey}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - (weeks * 7 - 1));
+  start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7)); // mundur ke Senin
+
+  const days: ActivityDay[] = [];
+  const cursor = new Date(start);
+  for (;;) {
+    const key = cursor.toISOString().slice(0, 10);
+    days.push({ date: key, count: counts.get(key) ?? 0 });
+    if (key >= todayKey) break;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  let streak = 0;
+  for (let i = days.length - 1; i >= 0; i--) {
+    if (days[i].count > 0) streak++;
+    else break;
+  }
+
+  return {
+    days,
+    total: items.length + notes.length + outputs.length,
+    activeDays: days.filter((d) => d.count > 0).length,
+    streak,
+    materi: items.length,
+    catatan: notes.length,
+    konten: outputs.length,
+  };
+}
+

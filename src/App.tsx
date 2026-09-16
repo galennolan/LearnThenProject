@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { LoginPage, RegisterPage } from './pages/Auth';
 import BelajarPage from './pages/Belajar';
 import HasilPage from './pages/Hasil';
+import JejakPage from './pages/Jejak';
 import { LearningDetailPage, LearningFormPage } from './pages/Learning';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/materi/:id" element={<Protected><LearningDetailPage /></Protected>} />
             <Route path="/materi/:id/ubah" element={<Protected><LearningFormPage /></Protected>} />
             <Route path="/hasil" element={<Protected><HasilPage /></Protected>} />
+            <Route path="/jejak" element={<Protected><JejakPage /></Protected>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
