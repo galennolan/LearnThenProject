@@ -15,7 +15,7 @@ import {
   saveReviewForLearning,
   updateLearningItem,
 } from '../services/learning';
-import { isValidUrl } from '../lib/time';
+import { daysUntilTarget, formatJakarta, isValidUrl, targetLabel } from '../lib/time';
 import { useToast } from '../hooks/useToast';
 import {
   Badge,
@@ -51,6 +51,7 @@ export function LearningFormPage() {
     topic: searchParams.get('topic') ?? '',
     learning_goal: searchParams.get('goal') ?? '',
     status: 'new' as LearningItem['status'],
+    target_date: searchParams.get('target_date') ?? '',
   });
 
   useEffect(() => {
@@ -65,6 +66,7 @@ export function LearningFormPage() {
           topic: m.topic ?? '',
           learning_goal: m.learning_goal ?? '',
           status: m.status,
+          target_date: m.target_date ? m.target_date.slice(0, 10) : '',
         }),
       )
       .catch((e) => setError(e instanceof Error ? e.message : 'Gagal memuat.'))
@@ -94,6 +96,7 @@ export function LearningFormPage() {
         topic: form.topic.trim() || null,
         learning_goal: form.learning_goal.trim() || null,
         status: form.status,
+        target_date: form.target_date || null,
       };
       if (isEdit && id) {
         await updateLearningItem(id, payload);
@@ -155,6 +158,9 @@ export function LearningFormPage() {
           </Field>
           <Field label="Tujuan belajar / Target output">
             <TextArea rows={2} value={form.learning_goal} onChange={(e) => set('learning_goal', e.target.value)} placeholder="cth: Membuat prototipe mini project dan artikel ringkasan" />
+          </Field>
+          <Field label="Target selesai" hint="Opsional — pendorong agar belajar tidak molor">
+            <TextInput type="date" value={form.target_date} onChange={(e) => set('target_date', e.target.value)} />
           </Field>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex gap-2">
@@ -427,6 +433,9 @@ export function LearningDetailPage() {
     { label: '5. Evaluasi & Lanjutan', done: hasReview },
   ];
   const progressPercent = Math.round((steps.filter((s) => s.done).length / steps.length) * 100);
+  const targetText = targetLabel(item.target_date);
+  const targetDiff = daysUntilTarget(item.target_date);
+  const isOverdue = !isLearned && targetDiff !== null && targetDiff < 0;
 
   const nextCycleUrl = `/materi/baru?from_cycle=true&topic=${encodeURIComponent(item.topic || '')}&title=${encodeURIComponent(
     nextStep.trim() ? nextStep.trim() : `Proyek Lanjutan: ${item.title}`,
@@ -497,6 +506,14 @@ export function LearningDetailPage() {
             <div>
               <dt className="font-medium text-slate-700">Tujuan belajar / Target output</dt>
               <dd className="text-slate-600">{item.learning_goal}</dd>
+            </div>
+          )}
+          {item.target_date && (
+            <div>
+              <dt className="font-medium text-slate-700">Target selesai</dt>
+              <dd className={`font-medium ${isOverdue ? 'text-red-600' : 'text-slate-600'}`}>
+                {formatJakarta(item.target_date)}{targetText ? ` • ${targetText}` : ''}
+              </dd>
             </div>
           )}
         </dl>

@@ -11,6 +11,7 @@ export interface LearningItemInput {
   learning_goal?: string | null;
   status?: LearningStatus;
   completed_at?: string | null;
+  target_date?: string | null;
 }
 
 export async function listLearningItems() {
