@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listLearningFocus, type LearningFocus } from '../services/learning';
-import { daysUntilTarget, formatJakarta, targetLabel } from '../lib/time';
 import { Badge, Button, Card, EmptyState, ErrorState, Loading, TextInput } from '../components/ui';
 
 type FilterTab = 'all' | 'active' | 'completed';
@@ -134,19 +133,6 @@ export default function BelajarPage() {
                 <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full bg-slate-900 transition-all" style={{ width: `${f.percent}%` }} />
                 </div>
-
-                {/* Target selesai */}
-                {f.item.target_date && (
-                  <p
-                    className={`mt-1.5 text-xs font-medium ${
-                      !f.isLearned && (daysUntilTarget(f.item.target_date) ?? 0) < 0
-                        ? 'text-red-600'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    Target {formatJakarta(f.item.target_date)} • {targetLabel(f.item.target_date)}
-                  </p>
-                )}
 
                 {/* Status siklus & langkah berikutnya */}
                 <div className="mt-2 flex items-center justify-between text-xs text-slate-500">

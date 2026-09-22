@@ -56,7 +56,6 @@ export interface LearningItem {
   status: LearningStatus;
   created_at: string;
   completed_at: string | null;
-  target_date: string | null;
 }
 
 export interface LearningNote {
