@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import type { LearningItem, LearningNote, LearningSketch, LearningStatus, Output, Project, ProjectReview, SketchSnapshot } from '../types';
+import type { LearningItem, LearningNote, LearningSketch, LearningStatus, Output, Project, ProjectReview } from '../types';
 import { createOutput, createProject } from './projects';
 
 export interface LearningItemInput {
@@ -461,7 +461,7 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   };
 }
 
-// ---------- Coretan papan tulis (tldraw) ----------
+// ---------- Coretan: link papan tulis (mis. tldraw) per materi ----------
 export async function getSketch(learningItemId: string): Promise<LearningSketch | null> {
   const { data, error } = await supabase
     .from('learning_sketches')
@@ -472,10 +472,10 @@ export async function getSketch(learningItemId: string): Promise<LearningSketch 
   return (data ?? null) as LearningSketch | null;
 }
 
-export async function saveSketch(learningItemId: string, snapshot: SketchSnapshot): Promise<LearningSketch> {
+export async function saveSketch(learningItemId: string, url: string): Promise<LearningSketch> {
   const { data: auth } = await supabase.auth.getUser();
   const existing = await getSketch(learningItemId);
-  const payload = { snapshot: snapshot as unknown as Record<string, unknown> };
+  const payload = { url };
   if (existing) {
     const { data, error } = await supabase
       .from('learning_sketches')

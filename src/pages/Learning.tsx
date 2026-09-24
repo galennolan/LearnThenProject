@@ -1,6 +1,6 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { LearningItem, LearningNote, Output, OutputPlatform, ProjectReview, SketchSnapshot, SourceType } from '../types';
+import type { LearningItem, LearningNote, Output, OutputPlatform, ProjectReview, SourceType } from '../types';
 import { PLATFORM_LABELS, SOURCE_TYPE_LABELS } from '../types';
 import {
   createLearningItem,
@@ -35,8 +35,6 @@ import {
 } from '../components/ui';
 
 const SOURCE_TYPES: SourceType[] = ['article', 'news', 'journal', 'youtube', 'documentation', 'book', 'google_doc', 'other'];
-
-const SketchEditor = lazy(() => import('../components/SketchEditor'));
 
 export function LearningFormPage() {
   const { id } = useParams();
@@ -251,9 +249,9 @@ export function LearningDetailPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [noteMsg, setNoteMsg] = useState('');
 
-  // Coretan papan tulis (tldraw)
+  // Coretan: link papan tulis (mis. tldraw)
   const [noteTab, setNoteTab] = useState<'tulis' | 'coret'>('tulis');
-  const [sketch, setSketch] = useState<SketchSnapshot | null>(null);
+  const [sketchUrl, setSketchUrl] = useState('');
   const [hasSketch, setHasSketch] = useState(false);
   const [savingSketch, setSavingSketch] = useState(false);
   const [sketchMsg, setSketchMsg] = useState('');
@@ -286,13 +284,8 @@ export function LearningDetailPage() {
       const existingNotes = await listLearningNotes(id);
       setNotes(existingNotes);
       const existingSketch = await getSketch(id);
-      if (existingSketch) {
-        setSketch(existingSketch.snapshot);
-        setHasSketch(true);
-      } else {
-        setSketch(null);
-        setHasSketch(false);
-      }
+      setSketchUrl(existingSketch?.url ?? '');
+      setHasSketch(Boolean(existingSketch?.url));
       setContents(await listContentForLearning(id));
       const rev = await getReviewForLearning(id);
       if (rev) {
@@ -346,17 +339,21 @@ export function LearningDetailPage() {
     }
   };
 
-  const handleSaveSketch = async (snapshot: SketchSnapshot) => {
+  const handleSaveSketch = async () => {
     if (!id) return;
     setSketchMsg('');
+    if (!isValidUrl(sketchUrl.trim())) {
+      setSketchMsg('Link tidak valid. Gunakan http(s)://... (mis. link share dari tldraw).');
+      return;
+    }
     setSavingSketch(true);
     try {
-      const saved = await saveSketch(id, snapshot);
-      setSketch(saved.snapshot);
+      const saved = await saveSketch(id, sketchUrl.trim());
+      setSketchUrl(saved.url ?? '');
       setHasSketch(true);
-      push('Coretan tersimpan.');
+      push('Link coretan tersimpan.');
     } catch (e) {
-      setSketchMsg(e instanceof Error ? e.message : 'Gagal menyimpan coretan.');
+      setSketchMsg(e instanceof Error ? e.message : 'Gagal menyimpan link.');
     } finally {
       setSavingSketch(false);
     }
@@ -658,14 +655,22 @@ export function LearningDetailPage() {
         )}
         </>
         ) : (
-          <div className="mt-3">
-            {hasSketch && (
-              <p className="mb-2 text-xs text-slate-500">Coretan tersimpan — lanjutkan menggambar lalu simpan lagi.</p>
+          <div className="mt-3 space-y-3">
+            <Field label="Link papan tulis *" hint="Buat coretan di tldraw.com → Share → tempel linknya di sini">
+              <TextInput value={sketchUrl} onChange={(e) => setSketchUrl(e.target.value)} placeholder="https://tldraw.com/..." inputMode="url" />
+            </Field>
+            {sketchMsg && <p className="text-sm text-red-600">{sketchMsg}</p>}
+            <Button onClick={handleSaveSketch} disabled={savingSketch} className="w-full">
+              {savingSketch ? 'Menyimpan...' : 'Simpan link coretan'}
+            </Button>
+            {hasSketch && isValidUrl(sketchUrl.trim()) && (
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <iframe src={sketchUrl.trim()} title="Coretan papan tulis" className="h-[420px] w-full bg-white" loading="lazy" />
+                <a href={sketchUrl.trim()} target="_blank" rel="noreferrer" className="block bg-white px-3 py-2 text-center text-xs font-medium text-slate-700 underline">
+                  Buka di tab baru
+                </a>
+              </div>
             )}
-            <Suspense fallback={<Loading text="Memuat papan coretan..." />}>
-              <SketchEditor initial={sketch} saving={savingSketch} onSave={handleSaveSketch} />
-            </Suspense>
-            {sketchMsg && <p className="mt-2 text-sm text-red-600">{sketchMsg}</p>}
           </div>
         )}
       </Card>
