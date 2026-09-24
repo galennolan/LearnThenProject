@@ -118,6 +118,7 @@ cp .env.example .env   # lalu isi nilai ASLI hanya di file .env lokal
 - **Hasil** (`/hasil`) — semua konten yang pernah dibuat, lengkap dengan platform, materi sumber, dan link.
 - **Jejak** (`/jejak`) — heatmap kotak-kotak ala GitHub dari aktivitas harian (materi + catatan + konten), plus total, hari aktif, dan rangkaian hari.
 - **UX** — toast setiap simpan, konfirmasi setiap hapus, state loading/empty/error, mobile-first, berbahasa Indonesia.
+- **PWA** — bisa di-install di HP (Add to Home Screen), ikon + splash otomatis, shell aplikasi ter-cache.
 
 ---
 
@@ -212,6 +213,17 @@ npx wrangler deploy
 - [ ] `npm run build` lolos; tidak ada `service_role` di bundle.
 
 </details>
+
+---
+
+## Install di HP (PWA)
+
+Setelah deploy (wajib HTTPS — domain `*.pages.dev`/worker-mu sudah HTTPS):
+
+- **Android (Chrome):** buka URL → menu ⋮ → **Add to Home screen** / **Install app**.
+- **iPhone (Safari):** buka URL → tombol **Share** → **Add to Home Screen**.
+
+Catatan: yang ter-cache offline hanya shell aplikasi; data belajar tetap butuh internet (Supabase).
 
 ---
 
