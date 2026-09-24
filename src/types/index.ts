@@ -70,6 +70,17 @@ export interface LearningNote {
   updated_at: string;
 }
 
+export type SketchSnapshot = import('@tldraw/tldraw').TLEditorSnapshot | import('@tldraw/tldraw').TLStoreSnapshot;
+
+export interface LearningSketch {
+  id: string;
+  user_id: string;
+  learning_item_id: string;
+  snapshot: SketchSnapshot;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;

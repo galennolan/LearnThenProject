@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import type { LearningItem, LearningNote, Output, OutputPlatform, ProjectReview, SourceType } from '../types';
+import type { LearningItem, LearningNote, Output, OutputPlatform, ProjectReview, SketchSnapshot, SourceType } from '../types';
 import { PLATFORM_LABELS, SOURCE_TYPE_LABELS } from '../types';
 import {
   createLearningItem,
@@ -13,6 +13,8 @@ import {
   markLearned,
   produceContentFromLearning,
   saveReviewForLearning,
+  getSketch,
+  saveSketch,
   updateLearningItem,
 } from '../services/learning';
 import { isValidUrl } from '../lib/time';
@@ -33,6 +35,8 @@ import {
 } from '../components/ui';
 
 const SOURCE_TYPES: SourceType[] = ['article', 'news', 'journal', 'youtube', 'documentation', 'book', 'google_doc', 'other'];
+
+const SketchEditor = lazy(() => import('../components/SketchEditor'));
 
 export function LearningFormPage() {
   const { id } = useParams();
@@ -247,6 +251,13 @@ export function LearningDetailPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [noteMsg, setNoteMsg] = useState('');
 
+  // Coretan papan tulis (tldraw)
+  const [noteTab, setNoteTab] = useState<'tulis' | 'coret'>('tulis');
+  const [sketch, setSketch] = useState<SketchSnapshot | null>(null);
+  const [hasSketch, setHasSketch] = useState(false);
+  const [savingSketch, setSavingSketch] = useState(false);
+  const [sketchMsg, setSketchMsg] = useState('');
+
   // Hasil karya / Output
   const [contents, setContents] = useState<Output[]>([]);
   const [cTitle, setCTitle] = useState('');
@@ -274,6 +285,14 @@ export function LearningDetailPage() {
       setItem(m);
       const existingNotes = await listLearningNotes(id);
       setNotes(existingNotes);
+      const existingSketch = await getSketch(id);
+      if (existingSketch) {
+        setSketch(existingSketch.snapshot);
+        setHasSketch(true);
+      } else {
+        setSketch(null);
+        setHasSketch(false);
+      }
       setContents(await listContentForLearning(id));
       const rev = await getReviewForLearning(id);
       if (rev) {
@@ -324,6 +343,22 @@ export function LearningDetailPage() {
       setNoteMsg(e instanceof Error ? e.message : 'Gagal menyimpan catatan.');
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  const handleSaveSketch = async (snapshot: SketchSnapshot) => {
+    if (!id) return;
+    setSketchMsg('');
+    setSavingSketch(true);
+    try {
+      const saved = await saveSketch(id, snapshot);
+      setSketch(saved.snapshot);
+      setHasSketch(true);
+      push('Coretan tersimpan.');
+    } catch (e) {
+      setSketchMsg(e instanceof Error ? e.message : 'Gagal menyimpan coretan.');
+    } finally {
+      setSavingSketch(false);
     }
   };
 
@@ -417,7 +452,7 @@ export function LearningDetailPage() {
 
   const isLearned = item.status === 'learned';
   const hasContent = contents.length > 0;
-  const hasNote = notes.length > 0;
+  const hasNote = notes.length > 0 || hasSketch;
   const hasReview = Boolean(review?.key_insight || review?.next_step || review?.what_worked);
   const steps = [
     { label: '1. Materi', done: true },
@@ -515,12 +550,29 @@ export function LearningDetailPage() {
       <Card>
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold text-slate-900">Catatan & Refleksi</h2>
-            <p className="text-xs text-slate-500">Tulis pemahaman dengan bahasamu sendiri (min. 100 karakter).</p>
+            <h2 className="font-semibold text-slate-900">Catatan & Coretan</h2>
+            <p className="text-xs text-slate-500">Tulis pemahaman atau coret-coret idemu di papan tulis.</p>
           </div>
-          {hasNote && <Badge>{notes.length} Catatan</Badge>}
+          {hasNote && <Badge>{notes.length + (hasSketch ? 1 : 0)} Catatan</Badge>}
         </div>
 
+        <div className="mt-3 flex gap-1 rounded-lg bg-slate-100 p-1">
+          {(['tulis', 'coret'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setNoteTab(t)}
+              className={`flex-1 rounded-md py-1.5 text-xs font-medium transition ${
+                noteTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              {t === 'tulis' ? 'Tulis' : 'Coret'}
+            </button>
+          ))}
+        </div>
+
+        {noteTab === 'tulis' ? (
+        <>
         {/* Daftar catatan yang sudah tersimpan */}
         {notes.length > 0 && (
           <div className="mt-3 space-y-2">
@@ -603,6 +655,18 @@ export function LearningDetailPage() {
           >
             + Tambah catatan {notes.length > 0 ? notes.length + 1 : ''}
           </button>
+        )}
+        </>
+        ) : (
+          <div className="mt-3">
+            {hasSketch && (
+              <p className="mb-2 text-xs text-slate-500">Coretan tersimpan — lanjutkan menggambar lalu simpan lagi.</p>
+            )}
+            <Suspense fallback={<Loading text="Memuat papan coretan..." />}>
+              <SketchEditor initial={sketch} saving={savingSketch} onSave={handleSaveSketch} />
+            </Suspense>
+            {sketchMsg && <p className="mt-2 text-sm text-red-600">{sketchMsg}</p>}
+          </div>
         )}
       </Card>
 

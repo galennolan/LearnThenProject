@@ -114,7 +114,7 @@ cp .env.example .env   # lalu isi nilai ASLI hanya di file .env lokal
 
 - **Auth** — daftar, masuk, keluar; semua halaman terproteksi.
 - **Belajar** (`/`) — daftar "lagi belajar apa": tiap kartu menampilkan progres + langkah berikutnya. Satu tombol **+ Baru**.
-- **Detail belajar** (`/materi/:id`) — info materi, progres 4 langkah, **satu kolom catatan** (min. 100 karakter), tombol **Tandai belajar selesai**, dan daftar **Hasil** + form tambah (platform, judul, link).
+- **Detail belajar** (`/materi/:id`) — info materi, progres langkah, **catatan tulis + coretan papan tulis (tldraw)** per materi, tombol **Tandai belajar selesai**, dan daftar **Hasil** + form tambah (platform, judul, link).
 - **Hasil** (`/hasil`) — semua konten yang pernah dibuat, lengkap dengan platform, materi sumber, dan link.
 - **Jejak** (`/jejak`) — heatmap kotak-kotak ala GitHub dari aktivitas harian (materi + catatan + konten), plus total, hari aktif, dan rangkaian hari.
 - **UX** — toast setiap simpan, konfirmasi setiap hapus, state loading/empty/error, mobile-first, berbahasa Indonesia.

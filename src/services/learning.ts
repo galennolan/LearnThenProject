@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import type { LearningItem, LearningNote, LearningStatus, Output, Project, ProjectReview } from '../types';
+import type { LearningItem, LearningNote, LearningSketch, LearningStatus, Output, Project, ProjectReview, SketchSnapshot } from '../types';
 import { createOutput, createProject } from './projects';
 
 export interface LearningItemInput {
@@ -142,11 +142,12 @@ export interface LearningFocus {
 function buildFocus(
   item: LearningItem,
   notedIds: Set<string>,
+  sketchedIds: Set<string>,
   projectIdsByLearning: Map<string, string[]>,
   outputCountByProject: Map<string, number>,
   reviewedProjectIds: Set<string>,
 ): LearningFocus {
-  const hasReflection = notedIds.has(item.id);
+  const hasReflection = notedIds.has(item.id) || sketchedIds.has(item.id);
   const isLearned = item.status === 'learned';
   const projectIds = projectIdsByLearning.get(item.id) ?? [];
   const outputCount = projectIds.reduce((n, pid) => n + (outputCountByProject.get(pid) ?? 0), 0);
@@ -166,20 +167,25 @@ function buildFocus(
 }
 
 export async function listLearningFocus(): Promise<LearningFocus[]> {
-  const [itemsRes, notesRes, projectsRes, outputsRes, reviewsRes] = await Promise.all([
+  const [itemsRes, notesRes, sketchesRes, projectsRes, outputsRes, reviewsRes] = await Promise.all([
     supabase.from('learning_items').select('*').order('created_at', { ascending: false }),
     supabase.from('learning_notes').select('learning_item_id'),
+    supabase.from('learning_sketches').select('learning_item_id'),
     supabase.from('projects').select('id,learning_item_id'),
     supabase.from('outputs').select('id,project_id'),
     supabase.from('project_reviews').select('project_id'),
   ]);
   if (itemsRes.error) throw new Error(itemsRes.error.message);
   if (notesRes.error) throw new Error(notesRes.error.message);
+  if (sketchesRes.error) throw new Error(sketchesRes.error.message);
   if (projectsRes.error) throw new Error(projectsRes.error.message);
   if (outputsRes.error) throw new Error(outputsRes.error.message);
   if (reviewsRes.error) throw new Error(reviewsRes.error.message);
 
   const notedIds = new Set((notesRes.data ?? []).map((n: { learning_item_id: string }) => n.learning_item_id));
+  const sketchedIds = new Set(
+    (sketchesRes.data ?? []).map((n: { learning_item_id: string }) => n.learning_item_id),
+  );
   const projectIdsByLearning = new Map<string, string[]>();
   for (const p of (projectsRes.data ?? []) as { id: string; learning_item_id: string | null }[]) {
     if (!p.learning_item_id) continue;
@@ -193,7 +199,7 @@ export async function listLearningFocus(): Promise<LearningFocus[]> {
     (reviewsRes.data ?? []).map((r: { project_id: string }) => r.project_id),
   );
   return ((itemsRes.data ?? []) as LearningItem[]).map((item) =>
-    buildFocus(item, notedIds, projectIdsByLearning, outputCountByProject, reviewedProjectIds),
+    buildFocus(item, notedIds, sketchedIds, projectIdsByLearning, outputCountByProject, reviewedProjectIds),
   );
 }
 
@@ -392,19 +398,22 @@ function jakartaDayKey(iso: string): string {
   }).format(new Date(iso));
 }
 
-/** Aktivitas harian dari materi + catatan + konten, diratakan ke hari Senin. */
+/** Aktivitas harian dari materi + catatan (tulis/coret) + konten, diratakan ke hari Senin. */
 export async function getActivity(weeks = 16): Promise<ActivitySummary> {
-  const [itemsRes, notesRes, outputsRes] = await Promise.all([
+  const [itemsRes, notesRes, sketchesRes, outputsRes] = await Promise.all([
     supabase.from('learning_items').select('created_at'),
     supabase.from('learning_notes').select('created_at'),
+    supabase.from('learning_sketches').select('updated_at'),
     supabase.from('outputs').select('created_at'),
   ]);
   if (itemsRes.error) throw new Error(itemsRes.error.message);
   if (notesRes.error) throw new Error(notesRes.error.message);
+  if (sketchesRes.error) throw new Error(sketchesRes.error.message);
   if (outputsRes.error) throw new Error(outputsRes.error.message);
 
   const items = (itemsRes.data ?? []) as { created_at: string }[];
   const notes = (notesRes.data ?? []) as { created_at: string }[];
+  const sketches = (sketchesRes.data ?? []) as { updated_at: string }[];
   const outputs = (outputsRes.data ?? []) as { created_at: string }[];
 
   const counts = new Map<string, { m: number; c: number; k: number }>();
@@ -416,6 +425,7 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   };
   items.forEach((r) => bump(r.created_at, 'm'));
   notes.forEach((r) => bump(r.created_at, 'c'));
+  sketches.forEach((r) => bump(r.updated_at, 'c'));
   outputs.forEach((r) => bump(r.created_at, 'k'));
 
   const todayKey = jakartaDayKey(new Date().toISOString());
@@ -449,5 +459,39 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
     catatan: sum((d) => d.catatan),
     konten: sum((d) => d.konten),
   };
+}
+
+// ---------- Coretan papan tulis (tldraw) ----------
+export async function getSketch(learningItemId: string): Promise<LearningSketch | null> {
+  const { data, error } = await supabase
+    .from('learning_sketches')
+    .select('*')
+    .eq('learning_item_id', learningItemId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data ?? null) as LearningSketch | null;
+}
+
+export async function saveSketch(learningItemId: string, snapshot: SketchSnapshot): Promise<LearningSketch> {
+  const { data: auth } = await supabase.auth.getUser();
+  const existing = await getSketch(learningItemId);
+  const payload = { snapshot: snapshot as unknown as Record<string, unknown> };
+  if (existing) {
+    const { data, error } = await supabase
+      .from('learning_sketches')
+      .update(payload)
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data as LearningSketch;
+  }
+  const { data, error } = await supabase
+    .from('learning_sketches')
+    .insert({ ...payload, learning_item_id: learningItemId, user_id: auth.user!.id })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data as LearningSketch;
 }
 
