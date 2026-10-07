@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listLearningFocus, type LearningFocus } from '../services/learning';
+import { listLearningFocus, getActivity, type LearningFocus } from '../services/learning';
 import { Badge, Button, Card, EmptyState, ErrorState, Loading, TextInput } from '../components/ui';
 
 type FilterTab = 'all' | 'active' | 'completed';
@@ -12,6 +12,7 @@ export default function BelajarPage() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterTab>('all');
+  const [reminder, setReminder] = useState<{ streak: number; target: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -28,6 +29,30 @@ export default function BelajarPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // Pengingat streak: muncul setelah jam 19 WIB bila hari ini belum ada aktivitas.
+  useEffect(() => {
+    if (loading || items.length === 0) return;
+    (async () => {
+      try {
+        const a = await getActivity(2);
+        const today = a.days[a.days.length - 1];
+        const hour = Number(
+          new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Jakarta',
+            hour: '2-digit',
+            hour12: false,
+          }).format(new Date()),
+        );
+        if (hour < 19 || today.count > 0 || a.streak === 0) return;
+        if (localStorage.getItem(`streak-dismiss-${today.date}`) === '1') return;
+        const next = items.find((f) => f.percent < 100);
+        setReminder({ streak: a.streak, target: next ? `/materi/${next.item.id}` : '/materi/baru' });
+      } catch {
+        /* pengingat opsional — abaikan bila gagal */
+      }
+    })();
+  }, [loading, items]);
 
   const filteredItems = useMemo(() => {
     return items.filter((f) => {
@@ -60,6 +85,38 @@ export default function BelajarPage() {
           <Button>+ Baru</Button>
         </Link>
       </div>
+
+      {reminder && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-900">Streak {reminder.streak} hari terancam putus</p>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Belum ada aktivitas hari ini. Satu catatan kecil cukup untuk menjaganya.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Link
+              to={reminder.target}
+              className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-center text-sm font-medium text-white"
+            >
+              Kerjakan sekarang
+            </Link>
+            <button
+              onClick={() => {
+                const key = `streak-dismiss-${new Intl.DateTimeFormat('en-CA', {
+                  timeZone: 'Asia/Jakarta',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                }).format(new Date())}`;
+                localStorage.setItem(key, '1');
+                setReminder(null);
+              }}
+              className="rounded-lg border border-amber-300 px-4 py-2.5 text-sm font-medium text-amber-900"
+            >
+              Nanti
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pencarian dan Filter Tab */}
       {items.length > 0 && (

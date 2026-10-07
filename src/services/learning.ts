@@ -495,3 +495,52 @@ export async function saveSketch(learningItemId: string, url: string): Promise<L
   return data as LearningSketch;
 }
 
+// ---------- Rincian aktivitas satu hari (zona Asia/Jakarta) ----------
+export interface DayDetail {
+  date: string;
+  materi: { id: string; title: string }[];
+  catatan: { id: string; title: string }[];
+  coretan: { id: string; title: string }[];
+  konten: { id: string; title: string; platform: Output['platform']; url: string }[];
+}
+
+export async function getDayDetail(dateKey: string): Promise<DayDetail> {
+  const [itemsRes, notesRes, sketchesRes, outputsRes] = await Promise.all([
+    supabase.from('learning_items').select('id,title,created_at'),
+    supabase.from('learning_notes').select('id,learning_item_id,created_at'),
+    supabase.from('learning_sketches').select('id,learning_item_id,updated_at'),
+    supabase.from('outputs').select('id,title,platform,url,project_id,created_at,projects(learning_item_id,learning_items(title))'),
+  ]);
+  if (itemsRes.error) throw new Error(itemsRes.error.message);
+  if (notesRes.error) throw new Error(notesRes.error.message);
+  if (sketchesRes.error) throw new Error(sketchesRes.error.message);
+  if (outputsRes.error) throw new Error(outputsRes.error.message);
+
+  const items = (itemsRes.data ?? []) as { id: string; title: string; created_at: string }[];
+  const titleOf = new Map(items.map((m) => [m.id, m.title]));
+
+  const notes = (notesRes.data ?? []) as { id: string; learning_item_id: string; created_at: string }[];
+  const sketches = (sketchesRes.data ?? []) as { id: string; learning_item_id: string; updated_at: string }[];
+  const outputs = (outputsRes.data ?? []) as {
+    id: string; title: string; platform: Output['platform']; url: string;
+    created_at: string;
+    projects: { learning_item_id?: string; learning_items?: { title?: string } | null } | null;
+  }[];
+
+  return {
+    date: dateKey,
+    materi: items
+      .filter((m) => jakartaDayKey(m.created_at) === dateKey)
+      .map((m) => ({ id: m.id, title: m.title })),
+    catatan: notes
+      .filter((n) => jakartaDayKey(n.created_at) === dateKey)
+      .map((n) => ({ id: n.learning_item_id, title: titleOf.get(n.learning_item_id) ?? 'Materi' })),
+    coretan: sketches
+      .filter((s) => jakartaDayKey(s.updated_at) === dateKey)
+      .map((s) => ({ id: s.learning_item_id, title: titleOf.get(s.learning_item_id) ?? 'Materi' })),
+    konten: outputs
+      .filter((o) => jakartaDayKey(o.created_at) === dateKey)
+      .map((o) => ({ id: o.id, title: o.title, platform: o.platform, url: o.url })),
+  };
+}
+

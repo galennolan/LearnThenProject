@@ -44,3 +44,17 @@ export async function createOutput(
   if (error) throw new Error(error.message);
   return data as Output;
 }
+
+export async function updateOutput(id: string, projectId: string, input: Partial<{ title: string; output_type: Output['output_type']; platform: Output['platform']; url: string; description: string | null; is_primary: boolean; status: string; published_at: string | null }>) {
+  if (input.is_primary) {
+    await supabase.from('outputs').update({ is_primary: false }).eq('project_id', projectId);
+  }
+  const { data, error } = await supabase.from('outputs').update(input).eq('id', id).select().single();
+  if (error) throw new Error(error.message);
+  return data as Output;
+}
+
+export async function deleteOutput(id: string) {
+  const { error } = await supabase.from('outputs').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}

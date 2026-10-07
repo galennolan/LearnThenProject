@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getActivity, type ActivitySummary } from '../services/learning';
+import { Link } from 'react-router-dom';
+import { getActivity, getDayDetail, type ActivitySummary, type DayDetail } from '../services/learning';
+import { PLATFORM_LABELS } from '../types';
 import { formatJakarta } from '../lib/time';
 import { Card, EmptyState, ErrorState, Loading } from '../components/ui';
 
@@ -18,6 +20,9 @@ export default function JejakPage() {
   const [data, setData] = useState<ActivitySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [detail, setDetail] = useState<DayDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -34,6 +39,24 @@ export default function JejakPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const selectDay = async (date: string) => {
+    if (selected === date) {
+      setSelected(null);
+      setDetail(null);
+      return;
+    }
+    setSelected(date);
+    setDetail(null);
+    setLoadingDetail(true);
+    try {
+      setDetail(await getDayDetail(date));
+    } catch {
+      setDetail(null);
+    } finally {
+      setLoadingDetail(false);
+    }
+  };
 
   if (loading) return <Loading text="Memuat jejak..." />;
   if (error) return <ErrorState message={error} onRetry={load} />;
@@ -82,10 +105,14 @@ export default function JejakPage() {
           >
             {weeks.map((week, wi) =>
               week.map((d, di) => (
-                <div
+                <button
                   key={`${wi}-${di}`}
-                  title={`${d.count} aktivitas • ${formatJakarta(`${d.date}T00:00:00Z`)}`}
-                  className={`h-3.5 w-3.5 rounded-[3px] ${intensity(d.count)}`}
+                  type="button"
+                  title={`${d.count} aktivitas • ${formatJakarta(`${d.date}T00:00:00Z`)} — ketuk untuk rincian`}
+                  onClick={() => selectDay(d.date)}
+                  className={`h-3.5 w-3.5 rounded-[3px] ${intensity(d.count)} ${
+                    selected === d.date ? 'ring-2 ring-slate-900 ring-offset-1' : ''
+                  }`}
                 />
               )),
             )}
@@ -99,6 +126,64 @@ export default function JejakPage() {
           <span>Rajin</span>
         </div>
       </Card>
+
+      {selected && (
+        <Card>
+          <h2 className="font-semibold text-slate-900">{formatJakarta(`${selected}T00:00:00Z`)}</h2>
+          {loadingDetail ? (
+            <p className="mt-2 text-sm text-slate-500">Memuat rincian...</p>
+          ) : !detail ||
+            detail.materi.length + detail.catatan.length + detail.coretan.length + detail.konten.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">Tidak ada aktivitas hari ini.</p>
+          ) : (
+            <div className="mt-3 space-y-3 text-sm">
+              {detail.materi.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">Materi dibuat</p>
+                  {detail.materi.map((m) => (
+                    <Link key={m.id} to={`/materi/${m.id}`} className="block font-medium text-slate-900 underline">
+                      {m.title}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {detail.catatan.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">Catatan ditulis</p>
+                  {detail.catatan.map((m, i) => (
+                    <Link key={`${m.id}-${i}`} to={`/materi/${m.id}`} className="block font-medium text-slate-900 underline">
+                      {m.title}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {detail.coretan.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">Coretan papan tulis</p>
+                  {detail.coretan.map((m, i) => (
+                    <Link key={`${m.id}-${i}`} to={`/materi/${m.id}`} className="block font-medium text-slate-900 underline">
+                      {m.title}
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {detail.konten.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">Konten dipublikasikan</p>
+                  {detail.konten.map((k) => (
+                    <a key={k.id} href={k.url} target="_blank" rel="noreferrer" className="block font-medium text-slate-900 underline">
+                      {k.title}{' '}
+                      <span className="text-xs font-normal text-slate-500">
+                        ({PLATFORM_LABELS[k.platform] ?? k.platform})
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         {stats.map((s) => (

@@ -113,10 +113,10 @@ cp .env.example .env   # lalu isi nilai ASLI hanya di file .env lokal
 ## Fitur
 
 - **Auth** — daftar, masuk, keluar; semua halaman terproteksi.
-- **Belajar** (`/`) — daftar "lagi belajar apa": tiap kartu menampilkan progres + langkah berikutnya. Satu tombol **+ Baru**.
+- **Belajar** (`/`) — daftar "lagi belajar apa": tiap kartu menampilkan progres + langkah berikutnya, pencarian + filter, dan **pengingat streak** tiap malam bila hari itu belum ada aktivitas. Satu tombol **+ Baru**.
 - **Detail belajar** (`/materi/:id`) — info materi, progres langkah, **catatan tulis + link coretan papan tulis (tldraw, tampil embed di aplikasi)** per materi, tombol **Tandai belajar selesai**, dan daftar **Hasil** + form tambah (platform, judul, link).
-- **Hasil** (`/hasil`) — semua konten yang pernah dibuat, lengkap dengan platform, materi sumber, dan link.
-- **Jejak** (`/jejak`) — heatmap kotak-kotak ala GitHub dari aktivitas harian (materi + catatan + konten), plus total, hari aktif, dan rangkaian hari.
+- **Hasil** (`/hasil`) — semua konten yang pernah dibuat (cari + filter platform + **ubah/hapus**), lengkap dengan materi sumber dan link.
+- **Jejak** (`/jejak`) — heatmap kotak-kotak ala GitHub dari aktivitas harian; **ketuk kotaknya** untuk melihat rincian hari itu.
 - **UX** — toast setiap simpan, konfirmasi setiap hapus, state loading/empty/error, mobile-first, berbahasa Indonesia.
 - **PWA** — bisa di-install di HP (Add to Home Screen), ikon + splash otomatis, shell aplikasi ter-cache.
 
