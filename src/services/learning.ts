@@ -79,7 +79,7 @@ export async function getLearningNote(learningItemId: string) {
 
 export async function createLearningNote(
   learningItemId: string,
-  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null },
+  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null; content?: string | null },
 ): Promise<LearningNote> {
   if (input.understanding.trim().length < 100) {
     throw new Error('Pemahaman minimal 100 karakter.');
@@ -96,7 +96,7 @@ export async function createLearningNote(
 
 export async function updateLearningNote(
   noteId: string,
-  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null },
+  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null; content?: string | null },
 ): Promise<LearningNote> {
   if (input.understanding.trim().length < 100) {
     throw new Error('Pemahaman minimal 100 karakter.');
@@ -118,7 +118,7 @@ export async function deleteLearningNote(noteId: string): Promise<void> {
 
 export async function saveLearningNote(
   learningItemId: string,
-  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null },
+  input: { understanding: string; critical_comment?: string | null; questions?: string | null; ideas?: string | null; content?: string | null },
 ) {
   return createLearningNote(learningItemId, input);
 }

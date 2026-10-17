@@ -66,6 +66,7 @@ export interface LearningNote {
   critical_comment: string | null;
   questions: string | null;
   ideas: string | null;
+  content: string | null;
   created_at: string;
   updated_at: string;
 }

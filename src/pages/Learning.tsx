@@ -173,11 +173,16 @@ export function LearningFormPage() {
   );
 }
 
+function toMarkdown(content: string): string {
+  return content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
 function buildNoteText(n: import('../types').LearningNote): string {
-  const parts = [`[Pemahaman]\n${n.understanding}`];
-  if (n.critical_comment) parts.push(`[Komentar Kritis]\n${n.critical_comment}`);
-  if (n.ideas) parts.push(`[Ide Proyek]\n${n.ideas}`);
-  if (n.questions) parts.push(`[Pertanyaan Terbuka]\n${n.questions}`);
+  const understanding = toMarkdown(n.understanding ?? '');
+  const parts = [`[Pemahaman]\n${understanding}`];
+  if (n.critical_comment) parts.push(`[Komentar Kritis]\n${toMarkdown(n.critical_comment)}`);
+  if (n.ideas) parts.push(`[Ide Proyek]\n${toMarkdown(n.ideas)}`);
+  if (n.questions) parts.push(`[Pertanyaan Terbuka]\n${toMarkdown(n.questions)}`);
   return parts.join('\n\n');
 }
 
@@ -205,23 +210,23 @@ function NoteCard({ note: n, index: idx }: { note: import('../types').LearningNo
           {copied ? '✓ Disalin!' : 'Salin'}
         </button>
       </div>
-      <p className="text-slate-800 whitespace-pre-wrap">{n.understanding}</p>
+      <div className="text-slate-800">{n.understanding ? toMarkdown(n.understanding) : ''}</div>
       {n.critical_comment && (
         <div className="mt-2">
           <p className="text-xs font-medium text-slate-500">Komentar Kritis:</p>
-          <p className="text-slate-700 whitespace-pre-wrap">{n.critical_comment}</p>
+          <div className="text-slate-700">{n.critical_comment ? toMarkdown(n.critical_comment) : ''}</div>
         </div>
       )}
       {n.ideas && (
         <div className="mt-2">
           <p className="text-xs font-medium text-slate-500">Ide Proyek:</p>
-          <p className="text-slate-700 whitespace-pre-wrap">{n.ideas}</p>
+          <div className="text-slate-700">{n.ideas ? toMarkdown(n.ideas) : ''}</div>
         </div>
       )}
       {n.questions && (
         <div className="mt-2">
           <p className="text-xs font-medium text-slate-500">Pertanyaan Terbuka:</p>
-          <p className="text-slate-700 whitespace-pre-wrap">{n.questions}</p>
+          <div className="text-slate-700">{n.questions ? toMarkdown(n.questions) : ''}</div>
         </div>
       )}
     </div>
@@ -588,7 +593,7 @@ export function LearningDetailPage() {
                 rows={5}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Apa inti materi ini? Konsep apa yang paling penting untuk diingat dan diterapkan?"
+                placeholder="Apa inti materi ini? Konsep apa yang paling penting untuk diingat dan diterapkan. Gunakan **tebalan** untuk tebalan teks."
               />
               <p className="mt-1 text-xs text-slate-500">{note.trim().length}/100 karakter minimum</p>
             </Field>
@@ -601,14 +606,14 @@ export function LearningDetailPage() {
               {showAdvancedReflection ? '− Sembunyikan refleksi tambahan' : '+ Tambah komentar kritis, ide proyek, atau pertanyaan'}
             </button>
 
-            {showAdvancedReflection && (
+{showAdvancedReflection && (
               <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <Field label="Komentar Kritis / Opini Pribadi" hint="Apakah ada kelemahan pendekatan ini?">
+                <Field label="Komentar Kritis / Opini Pribadi" hint="Gunakan **tebalan** untuk tebalan teks. Apakada ada kelemahan pendekatan ini?">
                   <TextArea
                     rows={2}
                     value={criticalComment}
                     onChange={(e) => setCriticalComment(e.target.value)}
-                    placeholder="cth: Pendekatan ini bagus untuk dataset kecil, tetapi kurang optimal jika konkurensi tinggi..."
+                    placeholder="cth: **Pendekatan ini bagus** untuk dataset kecil, tetapi kurang optimal jika konkurensi tinggi..."
                   />
                 </Field>
                 <Field label="Ide Proyek / Bentuk Karya Nyata" hint="Mini project apa yang bisa dibuat?">
@@ -616,15 +621,15 @@ export function LearningDetailPage() {
                     rows={2}
                     value={ideas}
                     onChange={(e) => setIdeas(e.target.value)}
-                    placeholder="cth: Buat Colab notebook membandingkan BM25 vs Dense Retrieval..."
+                    placeholder="cth: Buat Colab notebook membandingkan **BM25 vs Dense Retrieval**..."
                   />
                 </Field>
-                <Field label="Pertanyaan Terbuka / Yang Masih Membingungkan" hint="Hal yang perlu dieksplorasi lebih lanjut">
+                <Field label="Pertanyaan Terbuka / Yang Masih Membingungkan" hint="Hal yang perlu dieksplorasi lebih lanjut. Gunakan **tebalan** untuk tebalan teks">
                   <TextArea
                     rows={2}
                     value={questions}
                     onChange={(e) => setQuestions(e.target.value)}
-                    placeholder="cth: Bagaimana strategi re-ranking yang paling hemat latensi?"
+                    placeholder="cth: **Bagaimana strategi re-ranking** yang paling hemat latensi?"
                   />
                 </Field>
               </div>
