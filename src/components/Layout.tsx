@@ -24,6 +24,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <NavLink to="/" className={linkCls}>
               Belajar
             </NavLink>
+            <NavLink to="/diary" className={linkCls}>
+              Diary
+            </NavLink>
             <NavLink to="/hasil" className={linkCls}>
               Hasil
             </NavLink>

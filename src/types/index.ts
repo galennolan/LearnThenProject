@@ -80,6 +80,20 @@ export interface LearningSketch {
   updated_at: string;
 }
 
+export interface DiaryEntry {
+  id: string;
+  user_id: string;
+  entry_date: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiaryEntryInput {
+  entry_date: string;
+  content: string;
+}
+
 export interface Project {
   id: string;
   user_id: string;

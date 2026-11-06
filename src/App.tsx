@@ -8,6 +8,7 @@ import { Loading } from './components/ui';
 import { LoginPage, RegisterPage } from './pages/Auth';
 
 const BelajarPage = lazy(() => import('./pages/Belajar'));
+const DiaryPage = lazy(() => import('./pages/Diary'));
 const HasilPage = lazy(() => import('./pages/Hasil'));
 const JejakPage = lazy(() => import('./pages/Jejak'));
 const LearningDetailPage = lazy(() =>
@@ -35,6 +36,7 @@ export default function App() {
               <Route path="/masuk" element={<LoginPage />} />
               <Route path="/daftar" element={<RegisterPage />} />
               <Route path="/" element={<Protected><BelajarPage /></Protected>} />
+              <Route path="/diary" element={<Protected><DiaryPage /></Protected>} />
               <Route path="/materi/baru" element={<Protected><LearningFormPage /></Protected>} />
               <Route path="/materi/:id" element={<Protected><LearningDetailPage /></Protected>} />
               <Route path="/materi/:id/ubah" element={<Protected><LearningFormPage /></Protected>} />

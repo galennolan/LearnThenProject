@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import type { LearningItem, LearningNote, LearningSketch, LearningStatus, Output, Project, ProjectReview } from '../types';
 import { createOutput, createProject } from './projects';
+import { getDiariesForActivity } from './diary';
 
 export interface LearningItemInput {
   title: string;
@@ -377,6 +378,7 @@ export interface ActivityDay {
   materi: number;
   catatan: number;
   konten: number;
+  diary: number;
 }
 
 export interface ActivitySummary {
@@ -387,6 +389,7 @@ export interface ActivitySummary {
   materi: number;
   catatan: number;
   konten: number;
+  diary: number;
 }
 
 function jakartaDayKey(iso: string): string {
@@ -398,13 +401,14 @@ function jakartaDayKey(iso: string): string {
   }).format(new Date(iso));
 }
 
-/** Aktivitas harian dari materi + catatan (tulis/coret) + konten, diratakan ke hari Senin. */
+/** Aktivitas harian dari materi + catatan (tulis/coret) + diary + konten, diratakan ke hari Senin. */
 export async function getActivity(weeks = 16): Promise<ActivitySummary> {
-  const [itemsRes, notesRes, sketchesRes, outputsRes] = await Promise.all([
+  const [itemsRes, notesRes, sketchesRes, outputsRes, diaries] = await Promise.all([
     supabase.from('learning_items').select('created_at'),
     supabase.from('learning_notes').select('created_at'),
     supabase.from('learning_sketches').select('updated_at'),
     supabase.from('outputs').select('created_at'),
+    getDiariesForActivity(),
   ]);
   if (itemsRes.error) throw new Error(itemsRes.error.message);
   if (notesRes.error) throw new Error(notesRes.error.message);
@@ -416,10 +420,10 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   const sketches = (sketchesRes.data ?? []) as { updated_at: string }[];
   const outputs = (outputsRes.data ?? []) as { created_at: string }[];
 
-  const counts = new Map<string, { m: number; c: number; k: number }>();
-  const bump = (iso: string, kind: 'm' | 'c' | 'k') => {
-    const key = jakartaDayKey(iso);
-    const cur = counts.get(key) ?? { m: 0, c: 0, k: 0 };
+  const counts = new Map<string, { m: number; c: number; k: number; d: number }>();
+  const bump = (iso: string, kind: 'm' | 'c' | 'k' | 'd') => {
+    const key = iso.length === 10 && iso.includes('-') ? iso : jakartaDayKey(iso);
+    const cur = counts.get(key) ?? { m: 0, c: 0, k: 0, d: 0 };
     cur[kind]++;
     counts.set(key, cur);
   };
@@ -427,6 +431,7 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   notes.forEach((r) => bump(r.created_at, 'c'));
   sketches.forEach((r) => bump(r.updated_at, 'c'));
   outputs.forEach((r) => bump(r.created_at, 'k'));
+  diaries.forEach((r) => bump(r.entry_date || r.created_at, 'd'));
 
   const todayKey = jakartaDayKey(new Date().toISOString());
   const start = new Date(`${todayKey}T00:00:00Z`);
@@ -437,8 +442,15 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   const cursor = new Date(start);
   for (;;) {
     const key = cursor.toISOString().slice(0, 10);
-    const b = counts.get(key) ?? { m: 0, c: 0, k: 0 };
-    days.push({ date: key, count: b.m + b.c + b.k, materi: b.m, catatan: b.c, konten: b.k });
+    const b = counts.get(key) ?? { m: 0, c: 0, k: 0, d: 0 };
+    days.push({
+      date: key,
+      count: b.m + b.c + b.k + b.d,
+      materi: b.m,
+      catatan: b.c,
+      konten: b.k,
+      diary: b.d,
+    });
     if (key >= todayKey) break;
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
@@ -458,6 +470,7 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
     materi: sum((d) => d.materi),
     catatan: sum((d) => d.catatan),
     konten: sum((d) => d.konten),
+    diary: sum((d) => d.diary),
   };
 }
 
@@ -501,15 +514,17 @@ export interface DayDetail {
   materi: { id: string; title: string }[];
   catatan: { id: string; title: string }[];
   coretan: { id: string; title: string }[];
+  diaries: { id: string; entry_date: string; content: string }[];
   konten: { id: string; title: string; platform: Output['platform']; url: string }[];
 }
 
 export async function getDayDetail(dateKey: string): Promise<DayDetail> {
-  const [itemsRes, notesRes, sketchesRes, outputsRes] = await Promise.all([
+  const [itemsRes, notesRes, sketchesRes, outputsRes, diaries] = await Promise.all([
     supabase.from('learning_items').select('id,title,created_at'),
     supabase.from('learning_notes').select('id,learning_item_id,created_at'),
     supabase.from('learning_sketches').select('id,learning_item_id,updated_at'),
     supabase.from('outputs').select('id,title,platform,url,project_id,created_at,projects(learning_item_id,learning_items(title))'),
+    getDiariesForActivity(),
   ]);
   if (itemsRes.error) throw new Error(itemsRes.error.message);
   if (notesRes.error) throw new Error(notesRes.error.message);
@@ -538,6 +553,9 @@ export async function getDayDetail(dateKey: string): Promise<DayDetail> {
     coretan: sketches
       .filter((s) => jakartaDayKey(s.updated_at) === dateKey)
       .map((s) => ({ id: s.learning_item_id, title: titleOf.get(s.learning_item_id) ?? 'Materi' })),
+    diaries: diaries
+      .filter((d) => d.entry_date === dateKey || jakartaDayKey(d.created_at) === dateKey)
+      .map((d) => ({ id: d.id, entry_date: d.entry_date, content: d.content })),
     konten: outputs
       .filter((o) => jakartaDayKey(o.created_at) === dateKey)
       .map((o) => ({ id: o.id, title: o.title, platform: o.platform, url: o.url })),

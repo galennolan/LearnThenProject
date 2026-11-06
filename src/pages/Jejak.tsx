@@ -80,6 +80,7 @@ export default function JejakPage() {
     { label: 'Rangkaian hari', value: data.streak },
     { label: 'Materi', value: data.materi },
     { label: 'Catatan', value: data.catatan },
+    { label: 'Diary', value: data.diary },
     { label: 'Konten', value: data.konten },
   ];
 
@@ -133,7 +134,7 @@ export default function JejakPage() {
           {loadingDetail ? (
             <p className="mt-2 text-sm text-slate-500">Memuat rincian...</p>
           ) : !detail ||
-            detail.materi.length + detail.catatan.length + detail.coretan.length + detail.konten.length === 0 ? (
+            detail.materi.length + detail.catatan.length + detail.coretan.length + detail.diaries.length + detail.konten.length === 0 ? (
             <p className="mt-2 text-sm text-slate-500">Tidak ada aktivitas hari ini.</p>
           ) : (
             <div className="mt-3 space-y-3 text-sm">
@@ -167,6 +168,26 @@ export default function JejakPage() {
                   ))}
                 </div>
               )}
+              {detail.diaries.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-500">Diary Storyworthy</p>
+                    <Link to="/diary" className="text-xs text-indigo-600 hover:underline">
+                      Buka Diary →
+                    </Link>
+                  </div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {detail.diaries.map((d) => (
+                      <div
+                        key={d.id}
+                        className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-700 italic"
+                      >
+                        “{d.content}”
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               {detail.konten.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-slate-500">Konten dipublikasikan</p>
@@ -185,7 +206,7 @@ export default function JejakPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {stats.map((s) => (
           <Card key={s.label}>
             <p className="text-xl font-bold text-slate-900">{s.value}</p>
