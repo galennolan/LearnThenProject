@@ -113,6 +113,45 @@ export interface FinancialProjectionPoint {
   estimatedDebtPayment: number;
 }
 
+export interface InvestmentCondition {
+  label: string;
+  isMet: boolean;
+  currentValue: string;
+  targetValue: string;
+  note: string;
+}
+
+export interface InvestmentInstrumentSuggestion {
+  category: 'Konservatif' | 'Moderat' | 'Agresif';
+  riskLevel: 'Rendah' | 'Sedang' | 'Tinggi';
+  examples: string;
+  expectedReturn: string;
+  suitableFor: string;
+  timeHorizon: string;
+}
+
+export interface InvestmentGrowthSimulation {
+  years: number;
+  totalContributed: number;
+  estimatedValue: number;
+  estimatedProfit: number;
+}
+
+export interface InvestmentReadiness {
+  readinessStatus: 'Sangat Siap' | 'Siap Bertahap' | 'Belum Siap';
+  readinessColor: 'emerald' | 'amber' | 'rose';
+  headline: string;
+  explanation: string;
+  recommendedMonthlyAmount: number;
+  recommendedPercentage: number;
+  monthlySurplus: number;
+  emergencyFundGap: number;
+  targetEmergencyFund: number;
+  conditions: InvestmentCondition[];
+  suggestedInstruments: InvestmentInstrumentSuggestion[];
+  growthSimulations: InvestmentGrowthSimulation[];
+}
+
 export interface FinancialHealthAnalysis {
   healthScore: number;
   status: 'Sangat Sehat' | 'Sehat' | 'Waspada' | 'Kritis';
@@ -127,6 +166,7 @@ export interface FinancialHealthAnalysis {
     title: string;
     message: string;
   }[];
+  investmentReadiness: InvestmentReadiness;
 }
 
 export interface FinanceSummary {

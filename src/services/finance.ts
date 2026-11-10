@@ -10,6 +10,7 @@ import type {
   CategoryExpenseBreakdown,
   FinancialProjectionPoint,
   FinancialHealthAnalysis,
+  InvestmentReadiness,
 } from '../types/finance';
 import {
   DEFAULT_INCOME_CATEGORIES,
@@ -858,6 +859,129 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     });
   }
 
+  // 5. Analisis Kesiapan Investasi & Estimasi Alokasi (CFP Investment Framework)
+  const monthlySurplus = Math.max(0, monthlyIncome - monthlyExpense);
+  const targetEmergencyFund = Math.max(monthlyExpense * 6, 6000000); // Target ideal 6 bulan pengeluaran (min 6 jt)
+  const emergencyFundGap = Math.max(0, targetEmergencyFund - totalBalance);
+
+  const condCashFlow = {
+    label: 'Arus Kas Bulanan Surplus',
+    isMet: monthlySurplus > 0 && monthlyIncome > 0,
+    currentValue: monthlySurplus > 0 ? `+${formatRupiah(monthlySurplus)}/bln` : 'Defisit / Nihil',
+    targetValue: '> Rp 0 (Surplus)',
+    note: 'Sumber dana investasi rutin berasal dari selisih positif antara pemasukan dan pengeluaran.',
+  };
+
+  const condDsr = {
+    label: 'Beban Cicilan Utang Aman (DSR ≤ 30%)',
+    isMet: dsrPercent <= 30,
+    currentValue: `${dsrPercent}%`,
+    targetValue: 'Maks. 30%',
+    note: 'Jika cicilan > 30%, bunga pinjaman biasanya lebih tinggi daripada potensi return investasi awal.',
+  };
+
+  const condEmergencyFund = {
+    label: 'Cadangan Dana Darurat Terisi (≥ 3 Bulan)',
+    isMet: emergencyFundMonths >= 3,
+    currentValue: `${emergencyFundMonths} Bulan (${formatRupiah(totalBalance)})`,
+    targetValue: `Min. 3-6 Bulan (${formatRupiah(targetEmergencyFund)})`,
+    note: 'Perisai keuangan agar Anda tidak terpaksa menjual instrumen investasi saat pasar turun.',
+  };
+
+  let readinessStatus: InvestmentReadiness['readinessStatus'] = 'Belum Siap';
+  let readinessColor: InvestmentReadiness['readinessColor'] = 'rose';
+  let headline = '';
+  let explanation = '';
+  let recommendedPercentage = 0;
+  let recommendedMonthlyAmount = 0;
+
+  if (!condCashFlow.isMet || dsrPercent > 35 || emergencyFundMonths < 1) {
+    readinessStatus = 'Belum Siap';
+    readinessColor = 'rose';
+    recommendedPercentage = 0;
+    recommendedMonthlyAmount = 0;
+    headline = 'Fokus Perbaiki Fondasi: Lunasi Utang & Kumpulkan Dana Darurat';
+    explanation =
+      'Standar Certified Financial Planner (CFP) menyarankan untuk menahan diri dari produk investasi volatil terlebih dahulu. Sisa dana saat ini wajib diprioritaskan untuk melunasi cicilan berbunga tinggi serta mengisi rekening dana darurat minimal hingga 3 bulan biaya hidup.';
+  } else if (emergencyFundMonths < 3 || dsrPercent > 25 || savingsRatePercent < 15) {
+    readinessStatus = 'Siap Bertahap';
+    readinessColor = 'amber';
+    recommendedPercentage = 10;
+    const baseAmount = monthlyIncome > 0 ? monthlyIncome * 0.1 : 250000;
+    recommendedMonthlyAmount = Math.max(100000, Math.min(baseAmount, monthlySurplus * 0.4 || baseAmount));
+    headline = 'Mulai Bertahap: Alokasikan ke Instrumen Berisiko Rendah';
+    explanation =
+      'Fondasi arus kas Anda sudah mulai terbentuk. Anda disarankan membagi sisa dana bulanan: 60-70% dialokasikan mengisi dana darurat di tabungan likuid, dan 30-40% (~10% pendapatan) mulai diinvestasikan ke instrumen berisiko rendah agar terbiasa disiplin berinvestasi.';
+  } else {
+    readinessStatus = 'Sangat Siap';
+    readinessColor = 'emerald';
+    recommendedPercentage = 20;
+    const baseAmount = monthlyIncome > 0 ? monthlyIncome * 0.2 : 500000;
+    recommendedMonthlyAmount = Math.max(250000, Math.min(baseAmount, monthlySurplus * 0.7 || baseAmount));
+    headline = 'Kondisi Finansial Prima untuk Akumulasi & Pertumbuhan Aset';
+    explanation =
+      'Selamat! Anda memiliki cadangan dana darurat aman dan beban utang terkendali. Anda sangat siap mengalokasikan 15%–25% pendapatan bulanan ke portofolio investasi terencana (diversifikasi) untuk tujuan jangka menengah hingga kemandirian finansial.';
+  }
+
+  // Rekomendasi Instrumen Berdasarkan Piramida CFP
+  const suggestedInstruments: InvestmentReadiness['suggestedInstruments'] = [
+    {
+      category: 'Konservatif',
+      riskLevel: 'Rendah',
+      examples: 'Reksadana Pasar Uang (RDPU), Deposito Digital, Emas',
+      expectedReturn: '4.5% - 6.5% / thn',
+      suitableFor: 'Parkir dana darurat lanjutan & target jangka pendek (< 1-2 tahun)',
+      timeHorizon: '< 2 Tahun',
+    },
+    {
+      category: 'Moderat',
+      riskLevel: 'Sedang',
+      examples: 'Obligasi Negara (SBN / ORI / Sukuk), Reksadana Pendapatan Tetap',
+      expectedReturn: '6.0% - 8.5% / thn',
+      suitableFor: 'Dana pendidikan anak, renovasi, atau target jangka menengah (2-5 tahun)',
+      timeHorizon: '2 - 5 Tahun',
+    },
+    {
+      category: 'Agresif',
+      riskLevel: 'Tinggi',
+      examples: 'Reksadana Saham / Indeks (IDX30), Saham Bluechip Dividen',
+      expectedReturn: '10% - 15%+ / thn (fluktuatif)',
+      suitableFor: 'Dana pensiun & akumulasi kekayaan jangka panjang (> 5 tahun)',
+      timeHorizon: '> 5 Tahun',
+    },
+  ];
+
+  // Simulasi Pertumbuhan Compound Interest (Asumsi return moderat 7% per tahun)
+  const simPmt = recommendedMonthlyAmount > 0 ? recommendedMonthlyAmount : Math.max(250000, Math.round(monthlySurplus * 0.5) || 500000);
+  const annualRate = 0.07;
+  const growthSimulations: InvestmentReadiness['growthSimulations'] = [1, 3, 5, 10].map((years) => {
+    const r = annualRate / 12;
+    const n = years * 12;
+    const fv = simPmt * (((Math.pow(1 + r, n) - 1)) / r);
+    const totalContributed = simPmt * n;
+    return {
+      years,
+      totalContributed: Math.round(totalContributed),
+      estimatedValue: Math.round(fv),
+      estimatedProfit: Math.round(fv - totalContributed),
+    };
+  });
+
+  const investmentReadiness: InvestmentReadiness = {
+    readinessStatus,
+    readinessColor,
+    headline,
+    explanation,
+    recommendedMonthlyAmount: Math.round(recommendedMonthlyAmount),
+    recommendedPercentage,
+    monthlySurplus,
+    emergencyFundGap,
+    targetEmergencyFund,
+    conditions: [condCashFlow, condDsr, condEmergencyFund],
+    suggestedInstruments,
+    growthSimulations,
+  };
+
   const healthAnalysis: FinancialHealthAnalysis = {
     healthScore: score,
     status,
@@ -867,6 +991,7 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     savingsRatePercent,
     netWorth,
     advice,
+    investmentReadiness,
   };
 
   return {

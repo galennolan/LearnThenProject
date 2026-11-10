@@ -84,6 +84,9 @@ export default function KeuanganPage() {
   // Projection range selection (3, 6, 12 months)
   const [projectionRange, setProjectionRange] = useState<3 | 6 | 12>(6);
 
+  // User custom monthly investment simulator
+  const [customInvestAmount, setCustomInvestAmount] = useState<number | null>(null);
+
   // Data state
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -455,6 +458,24 @@ export default function KeuanganPage() {
   const health = summary?.healthAnalysis;
   const currentProjections = (summary?.projections || []).slice(0, projectionRange);
 
+  const activeSimAmount =
+    customInvestAmount !== null
+      ? customInvestAmount
+      : (health?.investmentReadiness?.recommendedMonthlyAmount || 250000);
+
+  const calculateCustomSimulation = (years: number, monthlyPmt: number) => {
+    const r = 0.07 / 12; // 7% annual rate
+    const n = years * 12;
+    const fv = monthlyPmt > 0 ? monthlyPmt * ((Math.pow(1 + r, n) - 1) / r) : 0;
+    const totalContributed = monthlyPmt * n;
+    return {
+      years,
+      totalContributed: Math.round(totalContributed),
+      estimatedValue: Math.round(fv),
+      estimatedProfit: Math.round(fv - totalContributed),
+    };
+  };
+
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
       {/* Top Header */}
@@ -614,7 +635,7 @@ export default function KeuanganPage() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    DSR: <strong>{health.dsrPercent}%</strong> • Dana Darurat: <strong>{health.emergencyFundMonths} bln</strong> • Savings Rate: <strong>{health.savingsRatePercent}%</strong>
+                    DSR: <strong>{health.dsrPercent}%</strong> • Dana Darurat: <strong>{health.emergencyFundMonths} bln</strong> • Kesiapan Investasi: <strong className={health.investmentReadiness?.readinessColor === 'emerald' ? 'text-emerald-700' : health.investmentReadiness?.readinessColor === 'amber' ? 'text-amber-700' : 'text-rose-700'}>{health.investmentReadiness?.readinessStatus || 'Evaluasi'}</strong>
                   </p>
                 </div>
               </div>
@@ -878,6 +899,251 @@ export default function KeuanganPage() {
               ))}
             </div>
           </Card>
+
+          {/* CFP INVESTMENT READINESS & SIMULATOR */}
+          {health.investmentReadiness && (
+            <Card className="border-indigo-100 bg-white shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-bold text-lg shadow-xs">
+                    📈
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-base text-slate-900">
+                        Evaluasi Kesiapan Investasi & Estimasi Alokasi
+                      </h3>
+                      <span
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          health.investmentReadiness.readinessColor === 'emerald'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                            : health.investmentReadiness.readinessColor === 'amber'
+                            ? 'bg-amber-50 text-amber-800 border-amber-300'
+                            : 'bg-rose-50 text-rose-800 border-rose-300'
+                        }`}
+                      >
+                        {health.investmentReadiness.readinessStatus}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Berdasarkan kaidah Piramida Keuangan Certified Financial Planner (CFP).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status Header Pill */}
+                <div className="text-left sm:text-right bg-slate-50 sm:bg-transparent p-2.5 sm:p-0 rounded-lg border sm:border-0 border-slate-100">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                    Rekomendasi Investasi Bulanan
+                  </span>
+                  <span className="text-base sm:text-lg font-black text-indigo-700">
+                    {health.investmentReadiness.recommendedMonthlyAmount > 0
+                      ? `${formatRupiah(health.investmentReadiness.recommendedMonthlyAmount)} / bln`
+                      : 'Fokus Dana Darurat Dulu'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Diagnosis Headline & Explanation */}
+              <div
+                className={`p-3.5 rounded-xl border text-xs ${
+                  health.investmentReadiness.readinessColor === 'emerald'
+                    ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                    : health.investmentReadiness.readinessColor === 'amber'
+                    ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                    : 'bg-rose-50/70 border-rose-200 text-rose-950'
+                }`}
+              >
+                <h4 className="font-bold text-sm mb-1">{health.investmentReadiness.headline}</h4>
+                <p className="leading-relaxed text-slate-700">{health.investmentReadiness.explanation}</p>
+              </div>
+
+              {/* 3 Core Prerequisites (Syarat Sebelum Investasi) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    3 Syarat Keamanan Finansial Sebelum Berinvestasi
+                  </span>
+                  <span className="text-[10px] text-slate-400">Prinsip CFP Piramida Keuangan</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  {health.investmentReadiness.conditions.map((cond, idx) => (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded-xl border text-xs space-y-1.5 ${
+                        cond.isMet
+                          ? 'bg-emerald-50/40 border-emerald-200'
+                          : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-slate-800 text-[11px] truncate">{cond.label}</span>
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                            cond.isMet ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {cond.isMet ? '✓ Aman' : '✕ Belum'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px] pt-0.5 border-t border-slate-100">
+                        <span className="text-slate-500">Saat Ini:</span>
+                        <span className={`font-semibold ${cond.isMet ? 'text-emerald-700' : 'text-rose-700'}`}>
+                          {cond.currentValue}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>Target Ideal:</span>
+                        <span className="font-medium text-slate-600">{cond.targetValue}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 pt-1 leading-tight">{cond.note}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Interactive Investment Simulator */}
+              <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30 p-4 space-y-4 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 pb-2.5">
+                  <div>
+                    <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                      <span>🧮</span> Kalkulator Simulasi Pertumbuhan Investasi
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      Estimasi compound interest moderat (~7% p.a.) jika konsisten menyisihkan dana tiap bulan.
+                    </p>
+                  </div>
+
+                  {/* Amount quick selectors */}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {[100000, 250000, 500000, 1000000, 2000000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setCustomInvestAmount(amt)}
+                        className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition ${
+                          activeSimAmount === amt
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {amt >= 1000000 ? `${amt / 1000000} Jt` : `${amt / 1000}rb`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Active Monthly Investment Display */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                      Alokasi Investasi Bulanan yang Disimulasikan:
+                    </span>
+                    <span className="text-xl font-black text-slate-900">
+                      {formatRupiah(activeSimAmount)}
+                      <span className="text-xs font-normal text-slate-500 ml-1">/ bulan</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Atur Nominal:</span>
+                    <input
+                      type="number"
+                      min="50000"
+                      step="50000"
+                      value={activeSimAmount}
+                      onChange={(e) => setCustomInvestAmount(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-36 px-2.5 py-1.5 text-xs font-bold text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                {/* 4 Cards: 1, 3, 5, 10 Years Projections */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {[1, 3, 5, 10].map((yr) => {
+                    const sim = calculateCustomSimulation(yr, activeSimAmount);
+                    return (
+                      <div key={yr} className="bg-white p-3 rounded-xl border border-indigo-100 text-xs shadow-xs space-y-1">
+                        <div className="flex items-center justify-between text-slate-400 font-semibold text-[10px]">
+                          <span>Horizon {yr} Tahun</span>
+                          <span className="text-indigo-600 font-bold">{yr * 12}x setor</span>
+                        </div>
+                        <p className="text-base font-black text-indigo-700 tracking-tight">
+                          {formatRupiah(sim.estimatedValue)}
+                        </p>
+                        <div className="text-[10px] space-y-0.5 pt-1 border-t border-slate-100 text-slate-500">
+                          <div className="flex justify-between">
+                            <span>Pokok disetor:</span>
+                            <span className="font-medium text-slate-700">{formatRupiah(sim.totalContributed)}</span>
+                          </div>
+                          <div className="flex justify-between text-emerald-600 font-semibold">
+                            <span>Est. Imbal Hasil:</span>
+                            <span>+{formatRupiah(sim.estimatedProfit)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <p className="text-[10px] text-slate-400 italic">
+                  * Simulasi di atas menggunakan rumus majemuk (compound interest) dengan asumsi imbal hasil moderat rata-rata 7% per tahun yang diinvestasikan kembali.
+                </p>
+              </div>
+
+              {/* Suggested Instruments by CFP Risk Profile */}
+              <div className="space-y-2.5">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  Pilihan Alokasi Instrumen Sesuai Profil & Jangka Waktu
+                </span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {health.investmentReadiness.suggestedInstruments.map((inst, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-200 transition shadow-xs space-y-2 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-slate-900">{inst.category}</span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            inst.riskLevel === 'Rendah'
+                              ? 'bg-blue-50 text-blue-700'
+                              : inst.riskLevel === 'Sedang'
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-purple-50 text-purple-700'
+                          }`}
+                        >
+                          Risiko {inst.riskLevel}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block text-[10px]">Contoh Produk:</span>
+                          <span className="font-semibold text-slate-800">{inst.examples}</span>
+                        </div>
+                        <div className="flex justify-between pt-1 border-t border-slate-100">
+                          <span className="text-slate-400">Potensi Return:</span>
+                          <span className="font-bold text-emerald-600">{inst.expectedReturn}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Jangka Waktu:</span>
+                          <span className="font-medium text-slate-700">{inst.timeHorizon}</span>
+                        </div>
+                      </div>
+
+                      <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100 leading-relaxed">
+                        💡 {inst.suitableFor}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-500 leading-relaxed">
+                ⚖️ <strong>Disclaimer Finansial:</strong> Evaluasi dan estimasi investasi di atas bersifat simulasi edukatif berdasarkan standar perencana keuangan (CFP). Keputusan investasi sepenuhnya merupakan tanggung jawab pribadi pengguna. Pastikan selalu memahami profil risiko Anda sebelum menempatkan dana.
+              </div>
+            </Card>
+          )}
 
           {/* CHART 1: 6-Month Cash Flow Trend */}
           <Card className="space-y-3">
