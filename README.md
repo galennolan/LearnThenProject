@@ -86,6 +86,11 @@ Enam tabel, semua dengan `user_id`, UUID, dan `created_at`/`updated_at`:
 | `outputs` | link hasil karya (maks. **satu** primary per project via unique index parsial) |
 | `project_reviews` | review (satu per project via `UNIQUE(project_id)`) |
 | `diaries` | catatan momen harian pendek khas Storyworthy (Homework for Life), tersimpan di jejak grid |
+| `accounts` | dompet & rekening bank/e-wallet untuk RuangUang |
+| `categories` | kategori pemasukan dan pengeluaran |
+| `transactions` | pencatatan mutasi kas masuk, keluar, dan bayar cicilan |
+| `debts` | kewajiban utang, tenor, suku bunga, dan nominal cicilan |
+| `debt_payments` | histori pembayaran cicilan utang aktual |
 
 **Row Level Security aktif di semua tabel.** Setiap policy mengikat `auth.uid() = user_id`, dan untuk `project_tasks`, `outputs`, `project_reviews` ditambah pengecekan bahwa `project` induk juga milik user yang sama — sehingga relasi `project_id` tidak bisa dipakai mengintip data orang lain.
 
@@ -116,6 +121,7 @@ cp .env.example .env   # lalu isi nilai ASLI hanya di file .env lokal
 - **Auth** — daftar, masuk, keluar; semua halaman terproteksi.
 - **Belajar** (`/`) — daftar "lagi belajar apa": tiap kartu menampilkan progres + langkah berikutnya, pencarian + filter, dan **pengingat streak** tiap malam bila hari itu belum ada aktivitas. Satu tombol **+ Baru**.
 - **Diary** (`/diary`) — jurnal harian momen pendek khas Storyworthy (*Homework for Life* karya Matthew Dicks) dengan tampilan tabel grid spreadsheet dan daftar kartu, inspirasi pemantik cerita, dan setiap penulisan otomatis tersimpan serta mengaktifkan kotak aktivitas harian di grid.
+- **Keuangan** (`/keuangan`) — modul *RuangUang* (Phase 1 MVP) untuk mencatat rekening/kas/bank/e-wallet, pemasukan, pengeluaran, serta manajemen cicilan utang keluarga dengan dashboard ringkasan saldo, sisa uang aman, dan kewajiban bulanan.
 - **Detail belajar** (`/materi/:id`) — info materi, progres langkah, **catatan tulis + link coretan papan tulis (tldraw, tampil embed di aplikasi)** per materi, tombol **Tandai belajar selesai**, dan daftar **Hasil** + form tambah (platform, judul, link).
 - **Hasil** (`/hasil`) — semua konten yang pernah dibuat (cari + filter platform + **ubah/hapus**), lengkap dengan materi sumber dan link.
 - **Jejak** (`/jejak`) — heatmap kotak-kotak ala GitHub dari aktivitas harian; **ketuk kotaknya** untuk melihat rincian hari itu.
