@@ -91,8 +91,11 @@ export default function KeuanganPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
 
-  // Forms & Modals state
-  const [showTxModal, setShowTxModal] = useState(false);
+  // Separate Modals for Pengeluaran and Pemasukan
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showIncomeModal, setShowIncomeModal] = useState(false);
+
+  // Transaction form states
   const [txType, setTxType] = useState<'income' | 'expense'>('expense');
   const [txAccountId, setTxAccountId] = useState('');
   const [txCategoryId, setTxCategoryId] = useState('');
@@ -193,15 +196,55 @@ export default function KeuanganPage() {
     }
   }, [txType, categories]);
 
-  const handleCreateTransaction = async (e: React.FormEvent) => {
+  // Selected account object for live cash balance preview
+  const selectedAccount = useMemo(() => {
+    return accounts.find((a) => a.id === txAccountId) || accounts[0] || null;
+  }, [accounts, txAccountId]);
+
+  const parsedAmount = Number(txAmount) || 0;
+  const currentAccBal = Number(selectedAccount?.current_balance) || 0;
+  const simulatedExpenseBal = currentAccBal - parsedAmount;
+  const simulatedIncomeBal = currentAccBal + parsedAmount;
+
+  // Open modal helpers with complete field separation
+  const openExpenseModal = () => {
+    setTxType('expense');
+    setTxAmount('');
+    setTxDesc('');
+    setTxDate(todayJakartaISO());
+    if (accounts.length > 0 && !txAccountId) {
+      setTxAccountId(accounts[0].id);
+    }
+    setShowExpenseModal(true);
+    setShowIncomeModal(false);
+  };
+
+  const openIncomeModal = () => {
+    setTxType('income');
+    setTxAmount('');
+    setTxDesc('');
+    setTxDate(todayJakartaISO());
+    if (accounts.length > 0 && !txAccountId) {
+      setTxAccountId(accounts[0].id);
+    }
+    setShowIncomeModal(true);
+    setShowExpenseModal(false);
+  };
+
+  const quickAddAmount = (val: number) => {
+    const cur = Number(txAmount) || 0;
+    setTxAmount(String(cur + val));
+  };
+
+  const handleCreateTransaction = async (e: React.FormEvent, type: 'income' | 'expense') => {
     e.preventDefault();
     if (!txAccountId) {
-      push('Pilih rekening sumber atau tujuan terlebih dahulu.', 'error');
+      push(type === 'expense' ? 'Pilih rekening sumber uang keluar terlebih dahulu.' : 'Pilih rekening tujuan uang masuk terlebih dahulu.', 'error');
       return;
     }
     const amt = Number(txAmount);
     if (!amt || amt <= 0) {
-      push('Nominal transaksi harus lebih dari 0.', 'error');
+      push('Nominal uang harus lebih dari 0.', 'error');
       return;
     }
 
@@ -210,13 +253,14 @@ export default function KeuanganPage() {
       await createTransaction({
         account_id: txAccountId,
         category_id: txCategoryId || null,
-        transaction_type: txType,
+        transaction_type: type,
         transaction_date: txDate,
         amount: amt,
         description: txDesc,
       });
-      push(`${txType === 'income' ? 'Pemasukan' : 'Pengeluaran'} berhasil dicatat!`);
-      setShowTxModal(false);
+      push(`${type === 'income' ? 'Pemasukan uang' : 'Pengeluaran uang'} berhasil dicatat!`);
+      setShowExpenseModal(false);
+      setShowIncomeModal(false);
       setTxAmount('');
       setTxDesc('');
       await loadData();
@@ -401,6 +445,10 @@ export default function KeuanganPage() {
     });
   }, [transactions, txSearch, txFilterType]);
 
+  const incomeTxCount = transactions.filter((t) => t.transaction_type === 'income').length;
+  const expenseTxCount = transactions.filter((t) => t.transaction_type === 'expense').length;
+  const debtTxCount = transactions.filter((t) => t.transaction_type === 'debt_payment').length;
+
   if (loading) return <Loading text="Memuat RuangUang & Analisis Keuangan..." />;
   if (error) return <ErrorState message={error} onRetry={loadData} />;
 
@@ -422,20 +470,14 @@ export default function KeuanganPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => {
-              setTxType('expense');
-              setShowTxModal(true);
-            }}
-            className="text-xs py-2 bg-rose-600 hover:bg-rose-700"
+            onClick={openExpenseModal}
+            className="text-xs py-2 bg-rose-600 hover:bg-rose-700 shadow-xs"
           >
             - Catat Pengeluaran
           </Button>
           <Button
-            onClick={() => {
-              setTxType('income');
-              setShowTxModal(true);
-            }}
-            className="text-xs py-2 bg-emerald-600 hover:bg-emerald-700"
+            onClick={openIncomeModal}
+            className="text-xs py-2 bg-emerald-600 hover:bg-emerald-700 shadow-xs"
           >
             + Catat Pemasukan
           </Button>
@@ -1024,34 +1066,81 @@ export default function KeuanganPage() {
       {/* TAB 2: TRANSAKSI */}
       {activeTab === 'transactions' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+            {/* Search and Filter */}
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <TextInput
                 placeholder="Cari transaksi..."
                 value={txSearch}
                 onChange={(e) => setTxSearch(e.target.value)}
-                className="text-xs py-1.5 w-full sm:w-60"
+                className="text-xs py-1.5 w-full sm:w-48"
               />
-              <SelectInput
-                value={txFilterType}
-                onChange={(e) => setTxFilterType(e.target.value)}
-                className="text-xs py-1.5 w-36"
-              >
-                <option value="all">Semua Jenis</option>
-                <option value="income">Pemasukan (+)</option>
-                <option value="expense">Pengeluaran (-)</option>
-                <option value="debt_payment">Cicilan Utang (-)</option>
-              </SelectInput>
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setTxFilterType('all')}
+                  className={`px-2.5 py-1 rounded-md transition ${
+                    txFilterType === 'all'
+                      ? 'bg-white shadow text-slate-900 font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Semua ({transactions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxFilterType('income')}
+                  className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
+                    txFilterType === 'income'
+                      ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                      : 'text-emerald-700 hover:text-emerald-800'
+                  }`}
+                >
+                  <span>+ Masuk</span>
+                  <span className="text-[10px] opacity-80">({incomeTxCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxFilterType('expense')}
+                  className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
+                    txFilterType === 'expense'
+                      ? 'bg-rose-600 text-white font-bold shadow-xs'
+                      : 'text-rose-700 hover:text-rose-800'
+                  }`}
+                >
+                  <span>- Keluar</span>
+                  <span className="text-[10px] opacity-80">({expenseTxCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTxFilterType('debt_payment')}
+                  className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
+                    txFilterType === 'debt_payment'
+                      ? 'bg-amber-600 text-white font-bold shadow-xs'
+                      : 'text-amber-700 hover:text-amber-800'
+                  }`}
+                >
+                  <span>Cicilan</span>
+                  <span className="text-[10px] opacity-80">({debtTxCount})</span>
+                </button>
+              </div>
             </div>
-            <Button
-              onClick={() => {
-                setTxType('expense');
-                setShowTxModal(true);
-              }}
-              className="text-xs py-2 self-end sm:self-auto"
-            >
-              + Catat Transaksi Baru
-            </Button>
+
+            {/* Explicit Separate Action Buttons */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <Button
+                onClick={openExpenseModal}
+                className="text-xs py-1.5 px-3 bg-rose-600 hover:bg-rose-700 shadow-xs"
+              >
+                - Catat Pengeluaran
+              </Button>
+              <Button
+                onClick={openIncomeModal}
+                className="text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 shadow-xs"
+              >
+                + Catat Pemasukan
+              </Button>
+            </div>
           </div>
 
           {filteredTransactions.length === 0 ? (
@@ -1067,8 +1156,8 @@ export default function KeuanganPage() {
                     <tr className="border-b border-slate-200 bg-slate-100/70 uppercase text-[10px] font-semibold text-slate-600">
                       <th className="py-2.5 px-3">Tanggal</th>
                       <th className="py-2.5 px-3">Deskripsi / Kategori</th>
-                      <th className="py-2.5 px-3">Rekening</th>
-                      <th className="py-2.5 px-3 text-right">Nominal</th>
+                      <th className="py-2.5 px-3">Rekening Kas</th>
+                      <th className="py-2.5 px-3 text-right">Nominal Uang</th>
                       <th className="py-2.5 px-3 text-right">Aksi</th>
                     </tr>
                   </thead>
@@ -1300,59 +1389,97 @@ export default function KeuanganPage() {
         </div>
       )}
 
-      {/* MODAL 1: CATAT TRANSAKSI */}
-      {showTxModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <h3 className="font-bold text-slate-900 text-base">
-                Catat {txType === 'income' ? 'Pemasukan (+)' : 'Pengeluaran (-)'}
-              </h3>
-              <button onClick={() => setShowTxModal(false)} className="text-slate-400 hover:text-slate-600">
+      {/* MODAL 1: KHUSUS CATAT PENGELUARAN (DENGAN PEMISAHAN BAGIAN UANG JELAS) */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl space-y-4 my-6">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-100 text-rose-700 font-bold text-base">
+                  -
+                </span>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Catat Pengeluaran Kas</h3>
+                  <p className="text-[11px] text-slate-500">Mencatat pengeluaran dan otomatis memotong saldo rekening terkait.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExpenseModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg p-1"
+              >
                 ×
               </button>
             </div>
 
-            <form onSubmit={handleCreateTransaction} className="space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTxType('expense')}
-                  className={`py-2 rounded-lg font-semibold text-xs transition ${
-                    txType === 'expense'
-                      ? 'bg-rose-600 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  - Pengeluaran
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTxType('income')}
-                  className={`py-2 rounded-lg font-semibold text-xs transition ${
-                    txType === 'income'
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  + Pemasukan
-                </button>
-              </div>
+            <form onSubmit={(e) => handleCreateTransaction(e, 'expense')} className="space-y-4">
+              {/* BAGIAN UANG & SUMBER KAS (MONEY SECTION) */}
+              <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-rose-200/70 pb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-rose-900 flex items-center gap-1.5">
+                    <span>💸</span> Bagian Uang & Sumber Kas
+                  </span>
+                  <span className="text-[10px] font-bold text-rose-700 bg-rose-100/90 px-2 py-0.5 rounded-full">
+                    Uang Keluar
+                  </span>
+                </div>
 
-              <Field label="Nominal (Rp)">
-                <TextInput
-                  type="number"
-                  placeholder="Contoh: 50000"
-                  value={txAmount}
-                  onChange={(e) => setTxAmount(e.target.value)}
-                  min="1"
-                  required
-                  autoFocus
-                />
-              </Field>
+                {/* Input Nominal Uang */}
+                <div>
+                  <label className="text-xs font-bold text-slate-800 block mb-1">
+                    Nominal Pengeluaran
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 font-black text-rose-600 text-base select-none">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Contoh: 50000"
+                      value={txAmount}
+                      onChange={(e) => setTxAmount(e.target.value)}
+                      className="w-full pl-11 pr-3 py-2 text-lg font-black text-slate-900 bg-white border border-rose-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-xs"
+                      required
+                      autoFocus
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Rekening / Kas">
+                  {/* Formatted Text Preview & Reset */}
+                  {parsedAmount > 0 && (
+                    <div className="mt-1.5 flex items-center justify-between text-xs font-bold text-rose-700 px-1">
+                      <span>{formatRupiah(parsedAmount)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTxAmount('')}
+                        className="text-[11px] font-normal text-slate-400 hover:text-slate-600 underline"
+                      >
+                        Reset Nominal
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Quick Add Amount Chips */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[20000, 50000, 100000, 250000, 500000, 1000000].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => quickAddAmount(val)}
+                        className="text-[11px] font-semibold bg-white border border-rose-200 text-rose-800 hover:bg-rose-100 px-2 py-1 rounded-md transition shadow-xs"
+                      >
+                        +{val >= 1000000 ? `${val / 1000000} Jt` : `${val / 1000}rb`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pilihan Rekening Sumber Uang */}
+                <div>
+                  <label className="text-xs font-bold text-slate-800 block mb-1">
+                    Rekening Sumber Uang (Saldo Terpotong)
+                  </label>
                   <SelectInput
                     value={txAccountId}
                     onChange={(e) => setTxAccountId(e.target.value)}
@@ -1360,72 +1487,107 @@ export default function KeuanganPage() {
                   >
                     {accounts.map((a) => (
                       <option key={a.id} value={a.id}>
-                        {a.name} ({formatRupiah(a.current_balance)})
+                        {a.name} ({ACCOUNT_TYPE_LABELS[a.account_type]}) — Saldo: {formatRupiah(a.current_balance)}
                       </option>
                     ))}
                   </SelectInput>
-                </Field>
+                </div>
 
-                <Field label="Tanggal">
+                {/* Live Saldo Simulation Card */}
+                {selectedAccount && (
+                  <div className="bg-white p-3 rounded-lg border border-rose-200 text-xs space-y-1.5 shadow-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Saldo Saat Ini ({selectedAccount.name}):</span>
+                      <span className="font-semibold">{formatRupiah(currentAccBal)}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-600 font-semibold">
+                      <span>Uang Dikeluarkan:</span>
+                      <span>- {formatRupiah(parsedAmount)}</span>
+                    </div>
+                    <div className="border-t border-slate-100 pt-1.5 flex justify-between font-bold">
+                      <span className="text-slate-800">Estimasi Sisa Saldo:</span>
+                      <span className={simulatedExpenseBal < 0 ? 'text-red-600 font-black' : 'text-slate-900'}>
+                        {formatRupiah(simulatedExpenseBal)}
+                      </span>
+                    </div>
+                    {simulatedExpenseBal < 0 && (
+                      <p className="text-[11px] text-red-600 font-bold pt-1 bg-red-50 p-1.5 rounded border border-red-200">
+                        ⚠️ Saldo rekening ini tidak mencukupi untuk pengeluaran ini!
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* BAGIAN DETAIL & KATEGORI (DETAIL SECTION) */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block border-b border-slate-200 pb-1.5">
+                  📋 Detail & Kategori Pengeluaran
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Tanggal Pengeluaran">
+                    <TextInput
+                      type="date"
+                      value={txDate}
+                      onChange={(e) => setTxDate(e.target.value)}
+                      required
+                    />
+                  </Field>
+
+                  <Field label="Kategori Pengeluaran">
+                    <div className="flex gap-1.5">
+                      <SelectInput
+                        value={txCategoryId}
+                        onChange={(e) => setTxCategoryId(e.target.value)}
+                        className="flex-1"
+                      >
+                        {filteredCategories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </SelectInput>
+                      <button
+                        type="button"
+                        onClick={() => setShowCatInput(!showCatInput)}
+                        className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white hover:bg-slate-100 font-semibold"
+                        title="Tambah kategori baru"
+                      >
+                        + Baru
+                      </button>
+                    </div>
+                  </Field>
+                </div>
+
+                {showCatInput && (
+                  <div className="flex gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+                    <TextInput
+                      placeholder="Nama kategori pengeluaran baru..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      className="text-xs py-1"
+                    />
+                    <Button type="button" onClick={handleAddCategory} className="text-xs py-1 px-3">
+                      Simpan
+                    </Button>
+                  </div>
+                )}
+
+                <Field label="Keterangan / Catatan Tambahan (Opsional)">
                   <TextInput
-                    type="date"
-                    value={txDate}
-                    onChange={(e) => setTxDate(e.target.value)}
-                    required
+                    placeholder="Contoh: Belanja sayur di pasar, bensin motor, dll"
+                    value={txDesc}
+                    onChange={(e) => setTxDesc(e.target.value)}
                   />
                 </Field>
               </div>
 
-              <Field label="Kategori">
-                <div className="flex gap-1.5">
-                  <SelectInput
-                    value={txCategoryId}
-                    onChange={(e) => setTxCategoryId(e.target.value)}
-                    className="flex-1"
-                  >
-                    {filteredCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </SelectInput>
-                  <button
-                    type="button"
-                    onClick={() => setShowCatInput(!showCatInput)}
-                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-50"
-                    title="Tambah kategori baru"
-                  >
-                    + Baru
-                  </button>
-                </div>
-              </Field>
-
-              {showCatInput && (
-                <div className="flex gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <TextInput
-                    placeholder="Nama kategori baru..."
-                    value={newCatName}
-                    onChange={(e) => setNewCatName(e.target.value)}
-                    className="text-xs py-1"
-                  />
-                  <Button type="button" onClick={handleAddCategory} className="text-xs py-1 px-3">
-                    Simpan
-                  </Button>
-                </div>
-              )}
-
-              <Field label="Keterangan / Catatan">
-                <TextInput
-                  placeholder="Contoh: Belanja mingguan di pasar"
-                  value={txDesc}
-                  onChange={(e) => setTxDesc(e.target.value)}
-                />
-              </Field>
-
+              {/* Action Buttons */}
               <div className="flex gap-2 pt-2">
                 <SecondaryButton
                   type="button"
-                  onClick={() => setShowTxModal(false)}
+                  onClick={() => setShowExpenseModal(false)}
                   className="flex-1"
                   disabled={txSubmitting}
                 >
@@ -1433,10 +1595,10 @@ export default function KeuanganPage() {
                 </SecondaryButton>
                 <Button
                   type="submit"
-                  className={`flex-1 ${txType === 'expense' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5"
                   disabled={txSubmitting}
                 >
-                  {txSubmitting ? 'Menyimpan...' : 'Simpan Transaksi'}
+                  {txSubmitting ? 'Menyimpan...' : 'Simpan Pengeluaran'}
                 </Button>
               </div>
             </form>
@@ -1444,7 +1606,219 @@ export default function KeuanganPage() {
         </div>
       )}
 
-      {/* MODAL 2: TAMBAH REKENING */}
+      {/* MODAL 2: KHUSUS CATAT PEMASUKAN (DENGAN PEMISAHAN BAGIAN UANG JELAS) */}
+      {showIncomeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl space-y-4 my-6">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 font-bold text-base">
+                  +
+                </span>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Catat Pemasukan Kas</h3>
+                  <p className="text-[11px] text-slate-500">Mencatat uang masuk dan otomatis menambah saldo rekening tujuan.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIncomeModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg p-1"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={(e) => handleCreateTransaction(e, 'income')} className="space-y-4">
+              {/* BAGIAN UANG & REKENING PENERIMA (MONEY SECTION) */}
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-emerald-200/70 pb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
+                    <span>💵</span> Bagian Uang & Rekening Tujuan
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full">
+                    Uang Masuk
+                  </span>
+                </div>
+
+                {/* Input Nominal Uang */}
+                <div>
+                  <label className="text-xs font-bold text-slate-800 block mb-1">
+                    Nominal Pemasukan
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 font-black text-emerald-600 text-base select-none">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Contoh: 3500000"
+                      value={txAmount}
+                      onChange={(e) => setTxAmount(e.target.value)}
+                      className="w-full pl-11 pr-3 py-2 text-lg font-black text-slate-900 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Formatted Text Preview & Reset */}
+                  {parsedAmount > 0 && (
+                    <div className="mt-1.5 flex items-center justify-between text-xs font-bold text-emerald-700 px-1">
+                      <span>{formatRupiah(parsedAmount)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTxAmount('')}
+                        className="text-[11px] font-normal text-slate-400 hover:text-slate-600 underline"
+                      >
+                        Reset Nominal
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Quick Add Amount Chips */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[50000, 100000, 500000, 1000000, 2500000, 5000000].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => quickAddAmount(val)}
+                        className="text-[11px] font-semibold bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-100 px-2 py-1 rounded-md transition shadow-xs"
+                      >
+                        +{val >= 1000000 ? `${val / 1000000} Jt` : `${val / 1000}rb`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Pilihan Rekening Penerima Uang */}
+                <div>
+                  <label className="text-xs font-bold text-slate-800 block mb-1">
+                    Rekening Penerima (Uang Masuk Disimpan ke Mana)
+                  </label>
+                  <SelectInput
+                    value={txAccountId}
+                    onChange={(e) => setTxAccountId(e.target.value)}
+                    required
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({ACCOUNT_TYPE_LABELS[a.account_type]}) — Saldo: {formatRupiah(a.current_balance)}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </div>
+
+                {/* Live Saldo Simulation Card */}
+                {selectedAccount && (
+                  <div className="bg-white p-3 rounded-lg border border-emerald-200 text-xs space-y-1.5 shadow-xs">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Saldo Saat Ini ({selectedAccount.name}):</span>
+                      <span className="font-semibold">{formatRupiah(currentAccBal)}</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-600 font-semibold">
+                      <span>Uang Diterima:</span>
+                      <span>+ {formatRupiah(parsedAmount)}</span>
+                    </div>
+                    <div className="border-t border-slate-100 pt-1.5 flex justify-between font-bold">
+                      <span className="text-slate-800">Estimasi Saldo Baru:</span>
+                      <span className="text-emerald-700 font-black">
+                        {formatRupiah(simulatedIncomeBal)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* BAGIAN DETAIL & KATEGORI (DETAIL SECTION) */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block border-b border-slate-200 pb-1.5">
+                  📋 Detail & Sumber Pemasukan
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Tanggal Pemasukan">
+                    <TextInput
+                      type="date"
+                      value={txDate}
+                      onChange={(e) => setTxDate(e.target.value)}
+                      required
+                    />
+                  </Field>
+
+                  <Field label="Kategori Pemasukan">
+                    <div className="flex gap-1.5">
+                      <SelectInput
+                        value={txCategoryId}
+                        onChange={(e) => setTxCategoryId(e.target.value)}
+                        className="flex-1"
+                      >
+                        {filteredCategories.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </SelectInput>
+                      <button
+                        type="button"
+                        onClick={() => setShowCatInput(!showCatInput)}
+                        className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white hover:bg-slate-100 font-semibold"
+                        title="Tambah kategori baru"
+                      >
+                        + Baru
+                      </button>
+                    </div>
+                  </Field>
+                </div>
+
+                {showCatInput && (
+                  <div className="flex gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+                    <TextInput
+                      placeholder="Nama kategori pemasukan baru..."
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      className="text-xs py-1"
+                    />
+                    <Button type="button" onClick={handleAddCategory} className="text-xs py-1 px-3">
+                      Simpan
+                    </Button>
+                  </div>
+                )}
+
+                <Field label="Keterangan / Catatan Tambahan (Opsional)">
+                  <TextInput
+                    placeholder="Contoh: Gaji bulanan kantor, hasil jualan, transfer teman, dll"
+                    value={txDesc}
+                    onChange={(e) => setTxDesc(e.target.value)}
+                  />
+                </Field>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2">
+                <SecondaryButton
+                  type="button"
+                  onClick={() => setShowIncomeModal(false)}
+                  className="flex-1"
+                  disabled={txSubmitting}
+                >
+                  Batal
+                </SecondaryButton>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5"
+                  disabled={txSubmitting}
+                >
+                  {txSubmitting ? 'Menyimpan...' : 'Simpan Pemasukan'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: TAMBAH REKENING */}
       {showAccModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl space-y-4">
@@ -1514,7 +1888,7 @@ export default function KeuanganPage() {
         </div>
       )}
 
-      {/* MODAL 3: TAMBAH UTANG */}
+      {/* MODAL 4: TAMBAH UTANG */}
       {showDebtModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl space-y-4 my-8">
@@ -1632,7 +2006,7 @@ export default function KeuanganPage() {
         </div>
       )}
 
-      {/* MODAL 4: BAYAR CICILAN UTANG */}
+      {/* MODAL 5: BAYAR CICILAN UTANG */}
       {payingDebt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl space-y-4">
