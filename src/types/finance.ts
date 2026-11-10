@@ -88,6 +88,47 @@ export interface DebtPayment {
   account_name?: string;
 }
 
+export interface CashFlowPoint {
+  month: string;
+  monthKey: string;
+  income: number;
+  expense: number;
+  debtPayment: number;
+  netCashFlow: number;
+}
+
+export interface CategoryExpenseBreakdown {
+  name: string;
+  amount: number;
+  percentage: number;
+  color: string;
+}
+
+export interface FinancialProjectionPoint {
+  month: string;
+  monthKey: string;
+  projectedBalance: number;
+  estimatedIncome: number;
+  estimatedExpense: number;
+  estimatedDebtPayment: number;
+}
+
+export interface FinancialHealthAnalysis {
+  healthScore: number;
+  status: 'Sangat Sehat' | 'Sehat' | 'Waspada' | 'Kritis';
+  statusColor: string;
+  dsrPercent: number;
+  emergencyFundMonths: number;
+  savingsRatePercent: number;
+  netWorth: number;
+  advice: {
+    category: string;
+    level: 'good' | 'warning' | 'danger';
+    title: string;
+    message: string;
+  }[];
+}
+
 export interface FinanceSummary {
   totalBalance: number;
   monthlyIncome: number;
@@ -98,6 +139,10 @@ export interface FinanceSummary {
   accounts: Account[];
   recentTransactions: Transaction[];
   upcomingDebts: Debt[];
+  cashFlowHistory: CashFlowPoint[];
+  categoryBreakdown: CategoryExpenseBreakdown[];
+  projections: FinancialProjectionPoint[];
+  healthAnalysis: FinancialHealthAnalysis;
 }
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
@@ -142,3 +187,4 @@ export const DEFAULT_EXPENSE_CATEGORIES = [
   'Sosial & Sedekah',
   'Pengeluaran Lainnya',
 ];
+

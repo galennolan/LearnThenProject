@@ -1,5 +1,20 @@
 import { useEffect, useState, useMemo } from 'react';
 import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+} from 'recharts';
+import {
   getFinanceSummary,
   listAccounts,
   createAccount,
@@ -45,13 +60,29 @@ import {
   TextInput,
 } from '../components/ui';
 
-type Tab = 'dashboard' | 'transactions' | 'accounts' | 'debts';
+type Tab = 'dashboard' | 'planner' | 'transactions' | 'accounts' | 'debts';
+
+const PIE_COLORS = [
+  '#4f46e5', // indigo
+  '#ec4899', // pink
+  '#f59e0b', // amber
+  '#10b981', // emerald
+  '#06b6d4', // cyan
+  '#8b5cf6', // purple
+  '#f43f5e', // rose
+  '#64748b', // slate
+  '#14b8a6', // teal
+  '#eab308', // yellow
+];
 
 export default function KeuanganPage() {
   const { push } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Projection range selection (3, 6, 12 months)
+  const [projectionRange, setProjectionRange] = useState<3 | 6 | 12>(6);
 
   // Data state
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
@@ -249,6 +280,23 @@ export default function KeuanganPage() {
       push('Jumlah pinjaman awal harus lebih dari 0.', 'error');
       return;
     }
+    const monthly = Number(debtMonthly);
+    if (!monthly || monthly <= 0) {
+      push('Nominal cicilan bulanan harus lebih dari 0.', 'error');
+      return;
+    }
+    const tenor = parseInt(debtTenor, 10);
+    if (!tenor || tenor <= 0) {
+      push('Sisa tenor bulan harus minimal 1.', 'error');
+      return;
+    }
+    const dueDay = parseInt(debtDueDay, 10);
+    if (!dueDay || dueDay < 1 || dueDay > 31) {
+      push('Tanggal jatuh tempo harus di antara 1 - 31.', 'error');
+      return;
+    }
+
+    const outstanding = debtOutstanding ? Number(debtOutstanding) : princ;
 
     setDebtSubmitting(true);
     try {
@@ -256,14 +304,13 @@ export default function KeuanganPage() {
         creditor_name: debtCreditor.trim(),
         debt_type: debtType,
         principal_amount: princ,
-        outstanding_principal: debtOutstanding ? Number(debtOutstanding) : princ,
-        monthly_installment: Number(debtMonthly) || 0,
-        due_day: Number(debtDueDay) || 1,
-        remaining_tenor: Number(debtTenor) || 12,
-        original_tenor: Number(debtTenor) || 12,
+        outstanding_principal: outstanding,
+        monthly_installment: monthly,
+        due_day: dueDay,
+        remaining_tenor: tenor,
         notes: debtNotes,
       });
-      push('Data utang berhasil dicatat!');
+      push('Kewajiban utang baru berhasil dicatat!');
       setShowDebtModal(false);
       setDebtCreditor('');
       setDebtPrincipal('');
@@ -280,15 +327,14 @@ export default function KeuanganPage() {
 
   const handlePayDebtSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payingDebt || !payAccountId) {
-      push('Data utang atau rekening sumber tidak valid.', 'error');
+    if (!payingDebt) return;
+    if (!payAccountId) {
+      push('Pilih rekening untuk pembayaran cicilan.', 'error');
       return;
     }
-    const princ = Number(payPrincipal) || 0;
-    const interest = Number(payInterest) || 0;
-    const fee = Number(payFee) || 0;
-    if (princ + interest + fee <= 0) {
-      push('Total pembayaran harus lebih besar dari 0.', 'error');
+    const princ = Number(payPrincipal);
+    if (!princ || princ <= 0) {
+      push('Nominal pembayaran pokok harus lebih dari 0.', 'error');
       return;
     }
 
@@ -299,11 +345,11 @@ export default function KeuanganPage() {
         account_id: payAccountId,
         payment_date: payDate,
         principal_paid: princ,
-        interest_paid: interest,
-        fee_paid: fee,
+        interest_paid: Number(payInterest) || 0,
+        fee_paid: Number(payFee) || 0,
         notes: payNotes,
       });
-      push(`Cicilan ${payingDebt.creditor_name} berhasil dibayar & saldo rekening terpotong!`);
+      push('Pembayaran cicilan berhasil dicatat dan memotong saldo rekening!');
       setPayingDebt(null);
       setPayPrincipal('');
       setPayInterest('0');
@@ -311,7 +357,7 @@ export default function KeuanganPage() {
       setPayNotes('');
       await loadData();
     } catch (err) {
-      push(err instanceof Error ? err.message : 'Gagal mencatat pembayaran cicilan', 'error');
+      push(err instanceof Error ? err.message : 'Gagal memproses pembayaran cicilan', 'error');
     } finally {
       setPaySubmitting(false);
     }
@@ -329,32 +375,37 @@ export default function KeuanganPage() {
         push('Rekening berhasil dihapus');
       } else if (deletingItem.type === 'debt') {
         await deleteDebt(deletingItem.id);
-        push('Catatan utang berhasil dihapus');
+        push('Data utang berhasil dihapus');
       }
       setDeletingItem(null);
       await loadData();
     } catch (err) {
-      push(err instanceof Error ? err.message : 'Gagal menghapus', 'error');
+      push(err instanceof Error ? err.message : 'Gagal menghapus data', 'error');
     } finally {
       setDeleting(false);
     }
   };
 
+  // Filtered transactions for Tab 2
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
+      const q = txSearch.toLowerCase();
       const matchSearch =
-        !txSearch.trim() ||
-        (t.description && t.description.toLowerCase().includes(txSearch.toLowerCase())) ||
-        (t.account_name && t.account_name.toLowerCase().includes(txSearch.toLowerCase())) ||
-        (t.category_name && t.category_name.toLowerCase().includes(txSearch.toLowerCase()));
+        !txSearch ||
+        (t.description?.toLowerCase() || '').includes(q) ||
+        (t.category_name?.toLowerCase() || '').includes(q) ||
+        (t.account_name?.toLowerCase() || '').includes(q);
 
       const matchType = txFilterType === 'all' || t.transaction_type === txFilterType;
       return matchSearch && matchType;
     });
   }, [transactions, txSearch, txFilterType]);
 
-  if (loading) return <Loading text="Memuat RuangUang (Keuangan)..." />;
+  if (loading) return <Loading text="Memuat RuangUang & Analisis Keuangan..." />;
   if (error) return <ErrorState message={error} onRetry={loadData} />;
+
+  const health = summary?.healthAnalysis;
+  const currentProjections = (summary?.projections || []).slice(0, projectionRange);
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
@@ -392,10 +443,10 @@ export default function KeuanganPage() {
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 overflow-x-auto">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+          className={`px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
             activeTab === 'dashboard'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -404,8 +455,21 @@ export default function KeuanganPage() {
           Ringkasan
         </button>
         <button
+          onClick={() => setActiveTab('planner')}
+          className={`px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition flex items-center gap-1.5 ${
+            activeTab === 'planner'
+              ? 'border-indigo-600 text-indigo-700'
+              : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <span>Analisis & Grafik</span>
+          <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+            CFP
+          </span>
+        </button>
+        <button
           onClick={() => setActiveTab('transactions')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+          className={`px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
             activeTab === 'transactions'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -415,7 +479,7 @@ export default function KeuanganPage() {
         </button>
         <button
           onClick={() => setActiveTab('accounts')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+          className={`px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
             activeTab === 'accounts'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -425,7 +489,7 @@ export default function KeuanganPage() {
         </button>
         <button
           onClick={() => setActiveTab('debts')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition ${
+          className={`px-4 py-2 text-sm font-semibold border-b-2 whitespace-nowrap transition ${
             activeTab === 'debts'
               ? 'border-slate-900 text-slate-900'
               : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -492,6 +556,34 @@ export default function KeuanganPage() {
               <span className="mt-1 block text-[10px] text-rose-700">Total sisa kewajiban</span>
             </Card>
           </div>
+
+          {/* CFP Planner Quick Banner */}
+          {health && (
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-white to-sky-50/60 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white font-black text-lg shadow-sm">
+                  {health.healthScore}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900">Financial Health Score</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${health.statusColor}`}>
+                      {health.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    DSR: <strong>{health.dsrPercent}%</strong> • Dana Darurat: <strong>{health.emergencyFundMonths} bln</strong> • Savings Rate: <strong>{health.savingsRatePercent}%</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveTab('planner')}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 self-end sm:self-auto"
+              >
+                Buka Analisis & Grafik Lengkap →
+              </button>
+            </div>
+          )}
 
           {/* Quick Account Balances */}
           <div>
@@ -618,6 +710,312 @@ export default function KeuanganPage() {
                   ))}
                 </div>
               )}
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: ANALISIS & GRAFIK (FINANCIAL PLANNER ENGINE) */}
+      {activeTab === 'planner' && summary && health && (
+        <div className="space-y-6">
+          {/* Header Card: CFP Score & Diagnosis */}
+          <Card className="border-indigo-100 bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 text-white p-5 shadow-lg">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold px-2 py-0.5 uppercase tracking-wide border border-indigo-400/30">
+                    CFP Advisory Engine
+                  </span>
+                  <span className="text-xs text-slate-400">Kesehatan Finansial Keluarga</span>
+                </div>
+                <h2 className="text-xl font-bold text-white">Financial Health Score</h2>
+                <p className="text-xs text-slate-300 max-w-xl">
+                  Evaluasi otomatis berdasarkan rasio utang aman (DSR), ketahanan dana darurat,
+                  laju tabungan, dan kekayaan bersih riil Anda.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4 bg-white/5 border border-white/10 p-3.5 rounded-xl backdrop-blur-sm self-start md:self-auto">
+                <div className="text-center">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Skor</span>
+                  <span className="text-3xl font-black text-indigo-400">{health.healthScore}</span>
+                  <span className="text-[10px] text-slate-400 block">/ 100</span>
+                </div>
+                <div className="border-l border-white/10 pl-3">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Status</span>
+                  <span className={`inline-block mt-0.5 text-xs font-bold px-2.5 py-1 rounded-md border ${health.statusColor}`}>
+                    {health.status}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4 Pillars of Financial Ratios */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/10">
+              <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                  Debt Service (DSR)
+                </span>
+                <p className={`text-base font-bold mt-0.5 ${health.dsrPercent > 35 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {health.dsrPercent}%
+                </p>
+                <span className="text-[10px] text-slate-400 block">
+                  {health.dsrPercent <= 30 ? '✓ Sangat Aman (<30%)' : '⚠ Di atas batas aman (>30%)'}
+                </span>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                  Dana Darurat
+                </span>
+                <p className={`text-base font-bold mt-0.5 ${health.emergencyFundMonths >= 3 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {health.emergencyFundMonths} Bulan
+                </p>
+                <span className="text-[10px] text-slate-400 block">
+                  {health.emergencyFundMonths >= 6 ? '✓ Sangat Kokoh (≥6 bln)' : health.emergencyFundMonths >= 3 ? '✓ Cukup (3-6 bln)' : '⚠ Butuh Ditingkatkan (<3 bln)'}
+                </span>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                  Savings Rate
+                </span>
+                <p className={`text-base font-bold mt-0.5 ${health.savingsRatePercent >= 20 ? 'text-emerald-400' : health.savingsRatePercent > 0 ? 'text-amber-400' : 'text-rose-400'}`}>
+                  {health.savingsRatePercent}%
+                </p>
+                <span className="text-[10px] text-slate-400 block">
+                  {health.savingsRatePercent >= 20 ? '✓ Target Tercapai (≥20%)' : health.savingsRatePercent > 0 ? 'Wajar (0-20%)' : '⚠ Defisit Kas'}
+                </span>
+              </div>
+
+              <div className="bg-white/5 p-3 rounded-lg border border-white/5">
+                <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                  Kekayaan Bersih (Net Worth)
+                </span>
+                <p className={`text-base font-bold mt-0.5 ${health.netWorth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {formatRupiah(health.netWorth)}
+                </p>
+                <span className="text-[10px] text-slate-400 block">
+                  Saldo aset dikurangi utang
+                </span>
+              </div>
+            </div>
+          </Card>
+
+          {/* CFP Recommendations Checklist */}
+          <Card className="border-indigo-100 bg-white shadow-sm space-y-3">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+              <span className="text-base">💡</span>
+              <h3 className="font-bold text-sm text-slate-900">
+                Rekomendasi Aksi dari Certified Financial Planner
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {health.advice.map((item: any, idx: number) => (
+                <div
+                  key={idx}
+                  className={`p-3 rounded-lg border text-xs ${
+                    item.level === 'danger'
+                      ? 'bg-rose-50/60 border-rose-200 text-rose-950'
+                      : item.level === 'warning'
+                      ? 'bg-amber-50/60 border-amber-200 text-amber-950'
+                      : 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <span>{item.level === 'danger' ? '🚨' : item.level === 'warning' ? '⚠️' : '✅'}</span>
+                      <span>{item.title}</span>
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-white border border-slate-200 text-slate-600">
+                      {item.category}
+                    </span>
+                  </div>
+                  <p className="leading-relaxed text-slate-600 mt-1">{item.message}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* CHART 1: 6-Month Cash Flow Trend */}
+          <Card className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900">
+                  Tren Arus Kas (6 Bulan Terakhir)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Perbandingan pemasukan, pengeluaran rutin, dan alokasi pembayaran cicilan utang.
+                </p>
+              </div>
+            </div>
+
+            <div className="h-72 w-full pt-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={summary.cashFlowHistory} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    tickFormatter={(v) => (v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${v / 1000}k`)}
+                  />
+                  <Tooltip
+                    formatter={(value: any, name: any) => [
+                      formatRupiah(Number(value) || 0),
+                      name === 'income' ? 'Pemasukan' : name === 'expense' ? 'Pengeluaran' : name === 'debtPayment' ? 'Cicilan Utang' : 'Net Arus Kas',
+                    ]}
+                    labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    height={36}
+                    formatter={(val) => {
+                      if (val === 'income') return 'Pemasukan';
+                      if (val === 'expense') return 'Pengeluaran';
+                      if (val === 'debtPayment') return 'Cicilan Utang';
+                      return val;
+                    }}
+                    wrapperStyle={{ fontSize: '11px' }}
+                  />
+                  <Bar dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} name="income" />
+                  <Bar dataKey="expense" fill="#f43f5e" radius={[4, 4, 0, 0]} name="expense" />
+                  <Bar dataKey="debtPayment" fill="#f59e0b" radius={[4, 4, 0, 0]} name="debtPayment" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          {/* CHART 2 & 3: Expense Breakdown Donut & Projections */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Donut Chart: Komposisi Pengeluaran Bulan Ini */}
+            <Card className="space-y-3">
+              <div className="border-b border-slate-100 pb-2">
+                <h3 className="font-bold text-sm text-slate-900">
+                  Distribusi Pengeluaran Bulan Ini
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Berdasarkan kategori transaksi pengeluaran aktif.
+                </p>
+              </div>
+
+              {summary.categoryBreakdown.length === 0 ? (
+                <div className="h-64 flex flex-col items-center justify-center text-slate-400 text-xs">
+                  <p>Belum ada pengeluaran di bulan ini.</p>
+                </div>
+              ) : (
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={summary.categoryBreakdown}
+                        dataKey="amount"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={3}
+                      >
+                        {summary.categoryBreakdown.map((item: any, index: number) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={item.color || PIE_COLORS[index % PIE_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: any, _: any, item: any) => [
+                          `${formatRupiah(Number(value) || 0)} (${item.payload.percentage}%)`,
+                          item.payload.name,
+                        ]}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={36}
+                        formatter={(val) => <span className="text-[11px] text-slate-600">{val}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </Card>
+
+            {/* CHART 3: Proyeksi Saldo (AreaChart) */}
+            <Card className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">
+                    Proyeksi Saldo Kumulatif
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Simulasi pertumbuhan kas berdasarkan arus kas rata-rata.
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
+                  <button
+                    onClick={() => setProjectionRange(3)}
+                    className={`px-2 py-1 rounded-md transition ${
+                      projectionRange === 3 ? 'bg-white shadow text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    3B
+                  </button>
+                  <button
+                    onClick={() => setProjectionRange(6)}
+                    className={`px-2 py-1 rounded-md transition ${
+                      projectionRange === 6 ? 'bg-white shadow text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    6B
+                  </button>
+                  <button
+                    onClick={() => setProjectionRange(12)}
+                    className={`px-2 py-1 rounded-md transition ${
+                      projectionRange === 12 ? 'bg-white shadow text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-900'
+                    }`}
+                  >
+                    12B
+                  </button>
+                </div>
+              </div>
+
+              <div className="h-64 w-full pt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={currentProjections} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#64748b' }}
+                      tickFormatter={(v) => (v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${v / 1000}k`)}
+                    />
+                    <Tooltip
+                      formatter={(val: any) => [formatRupiah(Number(val) || 0), 'Estimasi Saldo']}
+                      labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="projectedBalance"
+                      stroke="#4f46e5"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorBalance)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              <p className="text-[10px] text-slate-400 italic">
+                * Catatan: Proyeksi di atas merupakan simulasi matematis berbasis arus kas rata-rata, bukan jaminan saldo pasti.
+              </p>
             </Card>
           </div>
         </div>

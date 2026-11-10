@@ -111,3 +111,4 @@ create index if not exists idx_categories_user on public.categories(user_id, cat
 create index if not exists idx_transactions_user_date on public.transactions(user_id, transaction_date desc);
 create index if not exists idx_debts_user on public.debts(user_id, status);
 create index if not exists idx_debt_payments_debt on public.debt_payments(debt_id, payment_date desc);
+

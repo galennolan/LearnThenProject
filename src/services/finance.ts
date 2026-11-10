@@ -6,11 +6,30 @@ import type {
   Debt,
   DebtPayment,
   FinanceSummary,
+  CashFlowPoint,
+  CategoryExpenseBreakdown,
+  FinancialProjectionPoint,
+  FinancialHealthAnalysis,
 } from '../types/finance';
 import {
   DEFAULT_INCOME_CATEGORIES,
   DEFAULT_EXPENSE_CATEGORIES,
 } from '../types/finance';
+
+const PALETTE = [
+  '#059669', // emerald
+  '#4f46e5', // indigo
+  '#e11d48', // rose
+  '#d97706', // amber
+  '#0284c7', // sky
+  '#7c3aed', // violet
+  '#db2777', // pink
+  '#0d9488', // teal
+  '#ea580c', // orange
+  '#64748b', // slate
+];
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
 const ACCOUNTS_KEY = 'ruanguang_accounts_all';
 const CATEGORIES_KEY = 'ruanguang_categories_all';
@@ -610,6 +629,246 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
   const totalOutstandingDebt = activeDebts.reduce((sum, d) => sum + (Number(d.outstanding_principal) || 0), 0);
   const remainingSafeMoney = totalBalance - monthlyDebtObligation;
 
+  // 1. Histori Arus Kas (6 Bulan Terakhir)
+  const cashFlowHistory: CashFlowPoint[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = `${MONTH_NAMES[d.getMonth()]} '${String(d.getFullYear()).slice(-2)}`;
+
+    let inc = 0;
+    let exp = 0;
+    let debtPay = 0;
+
+    for (const t of transactions) {
+      if (t.transaction_date && t.transaction_date.startsWith(key)) {
+        const amt = Number(t.amount) || 0;
+        if (t.transaction_type === 'income') {
+          inc += amt;
+        } else if (t.transaction_type === 'expense') {
+          exp += amt;
+        } else if (t.transaction_type === 'debt_payment') {
+          debtPay += amt;
+        }
+      }
+    }
+
+    cashFlowHistory.push({
+      month: monthLabel,
+      monthKey: key,
+      income: inc,
+      expense: exp,
+      debtPayment: debtPay,
+      netCashFlow: inc - exp - debtPay,
+    });
+  }
+
+  // 2. Komposisi Pengeluaran Bulan Berjalan per Kategori
+  const catExpenseMap = new Map<string, number>();
+  let totalCurrentMonthExp = 0;
+  for (const t of transactions) {
+    if (t.transaction_date && t.transaction_date.startsWith(currentMonthPrefix)) {
+      if (t.transaction_type === 'expense' || t.transaction_type === 'debt_payment') {
+        const catName =
+          t.category_name || (t.transaction_type === 'debt_payment' ? 'Cicilan Utang' : 'Lain-lain');
+        const amt = Number(t.amount) || 0;
+        catExpenseMap.set(catName, (catExpenseMap.get(catName) || 0) + amt);
+        totalCurrentMonthExp += amt;
+      }
+    }
+  }
+
+  const categoryBreakdown: CategoryExpenseBreakdown[] = Array.from(catExpenseMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, amount], idx) => ({
+      name,
+      amount,
+      percentage: totalCurrentMonthExp > 0 ? Math.round((amount / totalCurrentMonthExp) * 100) : 0,
+      color: PALETTE[idx % PALETTE.length],
+    }));
+
+  // 3. Proyeksi Keuangan Masa Depan (12 Bulan ke Depan)
+  const projections: FinancialProjectionPoint[] = [];
+  let runningBalance = totalBalance;
+  const estMonthlyIncome = monthlyIncome > 0 ? monthlyIncome : 0;
+  // Pengeluaran operasional di luar utang
+  const currentMonthDebtTx = transactions
+    .filter((t) => t.transaction_type === 'debt_payment' && t.transaction_date.startsWith(currentMonthPrefix))
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  const estMonthlyExpenseOnly = Math.max(0, monthlyExpense - currentMonthDebtTx);
+
+  for (let m = 1; m <= 12; m++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${MONTH_NAMES[d.getMonth()]} '${String(d.getFullYear()).slice(-2)}`;
+
+    let estDebtPayment = 0;
+    for (const debt of activeDebts) {
+      if (debt.remaining_tenor >= m) {
+        estDebtPayment += Number(debt.monthly_installment) || 0;
+      }
+    }
+
+    runningBalance = runningBalance + estMonthlyIncome - estMonthlyExpenseOnly - estDebtPayment;
+
+    projections.push({
+      month: label,
+      monthKey: key,
+      projectedBalance: Math.round(runningBalance),
+      estimatedIncome: estMonthlyIncome,
+      estimatedExpense: estMonthlyExpenseOnly,
+      estimatedDebtPayment: estDebtPayment,
+    });
+  }
+
+  // 4. Analisis Kesehatan Finansial CFP (Certified Financial Planner)
+  const dsrPercent =
+    monthlyIncome > 0
+      ? Math.round((monthlyDebtObligation / monthlyIncome) * 100)
+      : monthlyDebtObligation > 0
+        ? 100
+        : 0;
+
+  const emergencyFundMonths =
+    monthlyExpense > 0
+      ? Math.round((totalBalance / monthlyExpense) * 10) / 10
+      : totalBalance > 0
+        ? 12
+        : 0;
+
+  const savingsRatePercent =
+    monthlyIncome > 0
+      ? Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100)
+      : 0;
+
+  const netWorth = totalBalance - totalOutstandingDebt;
+
+  // Skor 0 - 100
+  let score = 0;
+  if (dsrPercent === 0 && activeDebts.length === 0) score += 35;
+  else if (dsrPercent <= 20) score += 35;
+  else if (dsrPercent <= 30) score += 28;
+  else if (dsrPercent <= 40) score += 18;
+  else if (dsrPercent <= 50) score += 10;
+  else score += 5;
+
+  if (emergencyFundMonths >= 6) score += 30;
+  else if (emergencyFundMonths >= 3) score += 22;
+  else if (emergencyFundMonths >= 1) score += 14;
+  else score += 5;
+
+  if (savingsRatePercent >= 25) score += 25;
+  else if (savingsRatePercent >= 15) score += 20;
+  else if (savingsRatePercent >= 5) score += 12;
+  else if (savingsRatePercent >= 0) score += 8;
+  else score += 0;
+
+  if (netWorth > 0) score += 10;
+  else if (netWorth === 0) score += 5;
+  else score += 0;
+
+  score = Math.min(100, Math.max(0, score));
+
+  let status: FinancialHealthAnalysis['status'] = 'Sehat';
+  let statusColor = 'text-blue-700 bg-blue-50 border-blue-200';
+  if (score >= 80) {
+    status = 'Sangat Sehat';
+    statusColor = 'text-emerald-700 bg-emerald-50 border-emerald-300';
+  } else if (score >= 65) {
+    status = 'Sehat';
+    statusColor = 'text-blue-700 bg-blue-50 border-blue-200';
+  } else if (score >= 45) {
+    status = 'Waspada';
+    statusColor = 'text-amber-700 bg-amber-50 border-amber-300';
+  } else {
+    status = 'Kritis';
+    statusColor = 'text-rose-700 bg-rose-50 border-rose-300';
+  }
+
+  const advice: FinancialHealthAnalysis['advice'] = [];
+
+  // Saran DSR
+  if (dsrPercent > 35) {
+    advice.push({
+      category: 'Beban Utang (DSR)',
+      level: 'danger',
+      title: `Rasio Cicilan Tinggi (${dsrPercent}%)`,
+      message:
+        'Standar CFP menyarankan total cicilan maksimal 30% dari pendapatan bulanan. Prioritaskan pelunasan utang berbunga tertinggi untuk melegakan arus kas.',
+    });
+  } else if (dsrPercent > 0) {
+    advice.push({
+      category: 'Beban Utang (DSR)',
+      level: 'good',
+      title: `Rasio Cicilan Terkendali (${dsrPercent}%)`,
+      message:
+        'Beban cicilan Anda berada dalam koridor aman (< 30%). Pertahankan disiplin pembayaran hingga seluruh tenor selesai.',
+    });
+  } else {
+    advice.push({
+      category: 'Beban Utang (DSR)',
+      level: 'good',
+      title: 'Bebas Beban Cicilan (0%)',
+      message:
+        'Kondisi keuangan bebas utang. Seluruh sisa arus kas dapat dioptimalkan untuk akumulasi aset dan investasi.',
+    });
+  }
+
+  // Saran Dana Darurat
+  if (emergencyFundMonths < 3) {
+    advice.push({
+      category: 'Dana Darurat',
+      level: emergencyFundMonths < 1 ? 'danger' : 'warning',
+      title: `Cadangan Kas ${emergencyFundMonths} Bulan`,
+      message: `Cadangan kas Anda saat ini cukup untuk menopang sekitar ${emergencyFundMonths} bulan biaya hidup. Targetkan minimal 3–6 bulan pengeluaran untuk perlindungan keluarga dari risiko mendadak.`,
+    });
+  } else {
+    advice.push({
+      category: 'Dana Darurat',
+      level: 'good',
+      title: `Cadangan Kas Kokoh (${emergencyFundMonths} Bulan)`,
+      message: 'Dana darurat Anda sudah memenuhi standar ideal keluarga (3–6 bulan pengeluaran).',
+    });
+  }
+
+  // Saran Tabungan & Arus Kas
+  if (savingsRatePercent < 0) {
+    advice.push({
+      category: 'Arus Kas',
+      level: 'danger',
+      title: 'Defisit Bulanan',
+      message:
+        'Pengeluaran bulan ini melebihi pemasukan. Segera tinjau pengeluaran non-primer agar tidak menggerus saldo tabungan pokok.',
+    });
+  } else if (savingsRatePercent < 15) {
+    advice.push({
+      category: 'Arus Kas',
+      level: 'warning',
+      title: `Tingkat Tabungan ${savingsRatePercent}%`,
+      message:
+        'Rekomendasi perencana keuangan idealnya menyisihkan 15–20% pendapatan ke tabungan atau investasi rutin.',
+    });
+  } else {
+    advice.push({
+      category: 'Arus Kas',
+      level: 'good',
+      title: `Tingkat Tabungan Prima (${savingsRatePercent}%)`,
+      message:
+        'Kemampuan menyisihkan uang Anda sangat baik. Anda berada di jalur yang tepat untuk pertumbuhan kekayaan jangka panjang.',
+    });
+  }
+
+  const healthAnalysis: FinancialHealthAnalysis = {
+    healthScore: score,
+    status,
+    statusColor,
+    dsrPercent,
+    emergencyFundMonths,
+    savingsRatePercent,
+    netWorth,
+    advice,
+  };
+
   return {
     totalBalance,
     monthlyIncome,
@@ -620,5 +879,9 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     accounts,
     recentTransactions: transactions.slice(0, 10),
     upcomingDebts: activeDebts.sort((a, b) => a.due_day - b.due_day),
+    cashFlowHistory,
+    categoryBreakdown,
+    projections,
+    healthAnalysis,
   };
 }
