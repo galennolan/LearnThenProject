@@ -7,8 +7,8 @@ import { Card, EmptyState, ErrorState, Loading } from '../components/ui';
 
 function intensity(count: number): string {
   if (count === 0) return 'bg-slate-100';
-  if (count === 1) return 'bg-emerald-200';
-  if (count <= 3) return 'bg-emerald-400';
+  if (count === 1) return 'bg-emerald-300';
+  if (count <= 3) return 'bg-emerald-500';
   if (count <= 5) return 'bg-emerald-600';
   return 'bg-emerald-800';
 }

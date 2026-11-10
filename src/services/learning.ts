@@ -401,6 +401,24 @@ function jakartaDayKey(iso: string): string {
   }).format(new Date(iso));
 }
 
+function normalizeDayKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+  const match = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match && !str.includes('T')) {
+    return match[1];
+  }
+  try {
+    return jakartaDayKey(str);
+  } catch {
+    return str.slice(0, 10);
+  }
+}
+
 /** Aktivitas harian dari materi + catatan (tulis/coret) + diary + konten, diratakan ke hari Senin. */
 export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   const [itemsRes, notesRes, sketchesRes, outputsRes, diaries] = await Promise.all([
@@ -421,8 +439,9 @@ export async function getActivity(weeks = 16): Promise<ActivitySummary> {
   const outputs = (outputsRes.data ?? []) as { created_at: string }[];
 
   const counts = new Map<string, { m: number; c: number; k: number; d: number }>();
-  const bump = (iso: string, kind: 'm' | 'c' | 'k' | 'd') => {
-    const key = iso.length === 10 && iso.includes('-') ? iso : jakartaDayKey(iso);
+  const bump = (rawDate: string | null | undefined, kind: 'm' | 'c' | 'k' | 'd') => {
+    const key = normalizeDayKey(rawDate);
+    if (!key) return;
     const cur = counts.get(key) ?? { m: 0, c: 0, k: 0, d: 0 };
     cur[kind]++;
     counts.set(key, cur);
@@ -554,7 +573,7 @@ export async function getDayDetail(dateKey: string): Promise<DayDetail> {
       .filter((s) => jakartaDayKey(s.updated_at) === dateKey)
       .map((s) => ({ id: s.learning_item_id, title: titleOf.get(s.learning_item_id) ?? 'Materi' })),
     diaries: diaries
-      .filter((d) => d.entry_date === dateKey || jakartaDayKey(d.created_at) === dateKey)
+      .filter((d) => normalizeDayKey(d.entry_date) === dateKey || normalizeDayKey(d.created_at) === dateKey)
       .map((d) => ({ id: d.id, entry_date: d.entry_date, content: d.content })),
     konten: outputs
       .filter((o) => jakartaDayKey(o.created_at) === dateKey)
