@@ -29,6 +29,7 @@ import {
   recordDebtPayment,
   deleteDebt,
   formatRupiah,
+  formatRupiahShort,
 } from '../services/finance';
 import type {
   Account,
@@ -83,9 +84,6 @@ export default function KeuanganPage() {
 
   // Projection range selection (3, 6, 12 months)
   const [projectionRange, setProjectionRange] = useState<3 | 6 | 12>(6);
-
-  // User custom monthly investment simulator
-  const [customInvestAmount, setCustomInvestAmount] = useState<number | null>(null);
 
   // Data state
   const [summary, setSummary] = useState<FinanceSummary | null>(null);
@@ -237,6 +235,28 @@ export default function KeuanganPage() {
   const quickAddAmount = (val: number) => {
     const cur = Number(txAmount) || 0;
     setTxAmount(String(cur + val));
+  };
+
+  const handleCopyTransaction = (t: Transaction) => {
+    const type = t.transaction_type === 'income' ? 'income' : 'expense';
+    setTxType(type);
+    setTxAmount(String(t.amount));
+    setTxAccountId(t.account_id);
+    setTxCategoryId(t.category_id || '');
+    setTxDesc(t.description || '');
+    setTxDate(todayJakartaISO());
+
+    if (type === 'income') {
+      setShowIncomeModal(true);
+      setShowExpenseModal(false);
+    } else {
+      setShowExpenseModal(true);
+      setShowIncomeModal(false);
+    }
+
+    push(
+      `Data transaksi "${t.description || t.category_name || 'transaksi'}" disalin. Tanggal otomatis disetel ke hari ini, silakan ubah jika perlu.`,
+    );
   };
 
   const handleCreateTransaction = async (e: React.FormEvent, type: 'income' | 'expense') => {
@@ -457,24 +477,6 @@ export default function KeuanganPage() {
 
   const health = summary?.healthAnalysis;
   const currentProjections = (summary?.projections || []).slice(0, projectionRange);
-
-  const activeSimAmount =
-    customInvestAmount !== null
-      ? customInvestAmount
-      : (health?.investmentReadiness?.recommendedMonthlyAmount || 250000);
-
-  const calculateCustomSimulation = (years: number, monthlyPmt: number) => {
-    const r = 0.07 / 12; // 7% annual rate
-    const n = years * 12;
-    const fv = monthlyPmt > 0 ? monthlyPmt * ((Math.pow(1 + r, n) - 1) / r) : 0;
-    const totalContributed = monthlyPmt * n;
-    return {
-      years,
-      totalContributed: Math.round(totalContributed),
-      estimatedValue: Math.round(fv),
-      estimatedProfit: Math.round(fv - totalContributed),
-    };
-  };
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-5">
@@ -760,15 +762,27 @@ export default function KeuanganPage() {
                           {formatJakarta(t.transaction_date)} • {t.account_name}
                         </p>
                       </div>
-                      <span
-                        className={`font-bold whitespace-nowrap ${
-                          t.transaction_type === 'income'
-                            ? 'text-emerald-600'
-                            : 'text-rose-600'
-                        }`}
-                      >
-                        {t.transaction_type === 'income' ? '+' : '-'} {formatRupiah(t.amount)}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className={`font-bold whitespace-nowrap ${
+                            t.transaction_type === 'income'
+                              ? 'text-emerald-600'
+                              : 'text-rose-600'
+                          }`}
+                        >
+                          {t.transaction_type === 'income' ? '+' : '-'} {formatRupiah(t.amount)}
+                        </span>
+                        {t.transaction_type !== 'debt_payment' && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyTransaction(t)}
+                            className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold px-1.5 py-0.5 rounded hover:bg-indigo-50 border border-slate-200"
+                            title="Salin transaksi ini (untuk transaksi rutin)"
+                          >
+                            Salin
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1002,94 +1016,6 @@ export default function KeuanganPage() {
                 </div>
               </div>
 
-              {/* Interactive Investment Simulator */}
-              <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/30 p-4 space-y-4 shadow-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-indigo-100 pb-2.5">
-                  <div>
-                    <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
-                      <span>🧮</span> Kalkulator Simulasi Pertumbuhan Investasi
-                    </h4>
-                    <p className="text-[11px] text-slate-500">
-                      Estimasi compound interest moderat (~7% p.a.) jika konsisten menyisihkan dana tiap bulan.
-                    </p>
-                  </div>
-
-                  {/* Amount quick selectors */}
-                  <div className="flex flex-wrap items-center gap-1">
-                    {[100000, 250000, 500000, 1000000, 2000000].map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => setCustomInvestAmount(amt)}
-                        className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition ${
-                          activeSimAmount === amt
-                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        {amt >= 1000000 ? `${amt / 1000000} Jt` : `${amt / 1000}rb`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Active Monthly Investment Display */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-indigo-100 shadow-xs">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                      Alokasi Investasi Bulanan yang Disimulasikan:
-                    </span>
-                    <span className="text-xl font-black text-slate-900">
-                      {formatRupiah(activeSimAmount)}
-                      <span className="text-xs font-normal text-slate-500 ml-1">/ bulan</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">Atur Nominal:</span>
-                    <input
-                      type="number"
-                      min="50000"
-                      step="50000"
-                      value={activeSimAmount}
-                      onChange={(e) => setCustomInvestAmount(Math.max(0, Number(e.target.value) || 0))}
-                      className="w-36 px-2.5 py-1.5 text-xs font-bold text-slate-800 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                {/* 4 Cards: 1, 3, 5, 10 Years Projections */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[1, 3, 5, 10].map((yr) => {
-                    const sim = calculateCustomSimulation(yr, activeSimAmount);
-                    return (
-                      <div key={yr} className="bg-white p-3 rounded-xl border border-indigo-100 text-xs shadow-xs space-y-1">
-                        <div className="flex items-center justify-between text-slate-400 font-semibold text-[10px]">
-                          <span>Horizon {yr} Tahun</span>
-                          <span className="text-indigo-600 font-bold">{yr * 12}x setor</span>
-                        </div>
-                        <p className="text-base font-black text-indigo-700 tracking-tight">
-                          {formatRupiah(sim.estimatedValue)}
-                        </p>
-                        <div className="text-[10px] space-y-0.5 pt-1 border-t border-slate-100 text-slate-500">
-                          <div className="flex justify-between">
-                            <span>Pokok disetor:</span>
-                            <span className="font-medium text-slate-700">{formatRupiah(sim.totalContributed)}</span>
-                          </div>
-                          <div className="flex justify-between text-emerald-600 font-semibold">
-                            <span>Est. Imbal Hasil:</span>
-                            <span>+{formatRupiah(sim.estimatedProfit)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <p className="text-[10px] text-slate-400 italic">
-                  * Simulasi di atas menggunakan rumus majemuk (compound interest) dengan asumsi imbal hasil moderat rata-rata 7% per tahun yang diinvestasikan kembali.
-                </p>
-              </div>
-
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-500 leading-relaxed">
                 ⚖️ <strong>Disclaimer Finansial:</strong> Evaluasi dan estimasi investasi di atas bersifat simulasi edukatif berdasarkan standar perencana keuangan (CFP). Keputusan investasi sepenuhnya merupakan tanggung jawab pribadi pengguna. Pastikan selalu memahami profil risiko Anda sebelum menempatkan dana.
               </div>
@@ -1116,11 +1042,11 @@ export default function KeuanganPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
                   <YAxis
                     tick={{ fontSize: 10, fill: '#64748b' }}
-                    tickFormatter={(v) => (v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${v / 1000}k`)}
+                    tickFormatter={(v) => formatRupiahShort(Number(v) || 0)}
                   />
                   <Tooltip
                     formatter={(value: any, name: any) => [
-                      formatRupiah(Number(value) || 0),
+                      `${formatRupiah(Number(value) || 0)} (${formatRupiahShort(Number(value) || 0)})`,
                       name === 'income' ? 'Pemasukan' : name === 'expense' ? 'Pengeluaran' : name === 'debtPayment' ? 'Cicilan Utang' : 'Net Arus Kas',
                     ]}
                     labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
@@ -1253,10 +1179,13 @@ export default function KeuanganPage() {
                     <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748b' }} />
                     <YAxis
                       tick={{ fontSize: 10, fill: '#64748b' }}
-                      tickFormatter={(v) => (v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : `${v / 1000}k`)}
+                      tickFormatter={(v) => formatRupiahShort(Number(v) || 0)}
                     />
                     <Tooltip
-                      formatter={(val: any) => [formatRupiah(Number(val) || 0), 'Estimasi Saldo']}
+                      formatter={(val: any) => [
+                        `${formatRupiah(Number(val) || 0)} (${formatRupiahShort(Number(val) || 0)})`,
+                        'Estimasi Saldo',
+                      ]}
                       labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
                       contentStyle={{ borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '12px' }}
                     />
@@ -1398,7 +1327,18 @@ export default function KeuanganPage() {
                         >
                           {t.transaction_type === 'income' ? '+' : '-'} {formatRupiah(t.amount)}
                         </td>
-                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap space-x-2">
+                          {t.transaction_type !== 'debt_payment' && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyTransaction(t)}
+                              className="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px] inline-flex items-center gap-1"
+                              title="Salin transaksi ini (untuk transaksi rutin)"
+                            >
+                              <span>📋</span>
+                              <span>Salin</span>
+                            </button>
+                          )}
                           <button
                             onClick={() =>
                               setDeletingItem({

@@ -47,6 +47,26 @@ export function formatRupiah(amount: number | string | null | undefined): string
   }).format(num);
 }
 
+export function formatRupiahShort(amount: number | string | null | undefined): string {
+  const num = typeof amount === 'number' ? amount : Number(amount) || 0;
+  const abs = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
+
+  if (abs >= 1_000_000_000) {
+    const val = (abs / 1_000_000_000).toFixed(1).replace('.0', '').replace('.', ',');
+    return `${sign}${val} M`;
+  }
+  if (abs >= 1_000_000) {
+    const val = (abs / 1_000_000).toFixed(1).replace('.0', '').replace('.', ',');
+    return `${sign}${val} jt`;
+  }
+  if (abs >= 1_000) {
+    const val = (abs / 1_000).toFixed(0);
+    return `${sign}${val} rb`;
+  }
+  return `${sign}${abs}`;
+}
+
 function getLocal<T>(key: string): T[] {
   try {
     const raw = localStorage.getItem(key);
