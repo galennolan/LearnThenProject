@@ -1090,55 +1090,6 @@ export default function KeuanganPage() {
                 </p>
               </div>
 
-              {/* Suggested Instruments by CFP Risk Profile */}
-              <div className="space-y-2.5">
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
-                  Pilihan Alokasi Instrumen Sesuai Profil & Jangka Waktu
-                </span>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {health.investmentReadiness.suggestedInstruments.map((inst, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-200 transition shadow-xs space-y-2 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-slate-900">{inst.category}</span>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            inst.riskLevel === 'Rendah'
-                              ? 'bg-blue-50 text-blue-700'
-                              : inst.riskLevel === 'Sedang'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-purple-50 text-purple-700'
-                          }`}
-                        >
-                          Risiko {inst.riskLevel}
-                        </span>
-                      </div>
-
-                      <div className="space-y-1 text-[11px]">
-                        <div>
-                          <span className="text-slate-400 block text-[10px]">Contoh Produk:</span>
-                          <span className="font-semibold text-slate-800">{inst.examples}</span>
-                        </div>
-                        <div className="flex justify-between pt-1 border-t border-slate-100">
-                          <span className="text-slate-400">Potensi Return:</span>
-                          <span className="font-bold text-emerald-600">{inst.expectedReturn}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Jangka Waktu:</span>
-                          <span className="font-medium text-slate-700">{inst.timeHorizon}</span>
-                        </div>
-                      </div>
-
-                      <p className="text-[10px] text-slate-500 pt-1 border-t border-slate-100 leading-relaxed">
-                        💡 {inst.suitableFor}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-500 leading-relaxed">
                 ⚖️ <strong>Disclaimer Finansial:</strong> Evaluasi dan estimasi investasi di atas bersifat simulasi edukatif berdasarkan standar perencana keuangan (CFP). Keputusan investasi sepenuhnya merupakan tanggung jawab pribadi pengguna. Pastikan selalu memahami profil risiko Anda sebelum menempatkan dana.
               </div>
