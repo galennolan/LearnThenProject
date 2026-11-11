@@ -1212,80 +1212,86 @@ export default function KeuanganPage() {
       {/* TAB 2: TRANSAKSI */}
       {activeTab === 'transactions' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-            {/* Search and Filter */}
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              <TextInput
-                placeholder="Cari transaksi..."
-                value={txSearch}
-                onChange={(e) => setTxSearch(e.target.value)}
-                className="text-xs py-1.5 w-full sm:w-48"
-              />
-              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => setTxFilterType('all')}
-                  className={`px-2.5 py-1 rounded-md transition ${
-                    txFilterType === 'all'
-                      ? 'bg-white shadow text-slate-900 font-bold'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
+          <div className="space-y-3">
+            {/* Top row: Search input & Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-2.5 justify-between items-stretch sm:items-center">
+              <div className="relative flex-1 max-w-full sm:max-w-xs">
+                <TextInput
+                  placeholder="Cari transaksi..."
+                  value={txSearch}
+                  onChange={(e) => setTxSearch(e.target.value)}
+                  className="text-xs py-2 w-full"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                <Button
+                  onClick={openExpenseModal}
+                  className="text-xs py-2 px-3 bg-rose-600 hover:bg-rose-700 shadow-xs justify-center"
                 >
-                  Semua ({transactions.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTxFilterType('income')}
-                  className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
-                    txFilterType === 'income'
-                      ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                      : 'text-emerald-700 hover:text-emerald-800'
-                  }`}
+                  - Catat Keluar
+                </Button>
+                <Button
+                  onClick={openIncomeModal}
+                  className="text-xs py-2 px-3 bg-emerald-600 hover:bg-emerald-700 shadow-xs justify-center"
                 >
-                  <span>+ Masuk</span>
-                  <span className="text-[10px] opacity-80">({incomeTxCount})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTxFilterType('expense')}
-                  className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
-                    txFilterType === 'expense'
-                      ? 'bg-rose-600 text-white font-bold shadow-xs'
-                      : 'text-rose-700 hover:text-rose-800'
-                  }`}
-                >
-                  <span>- Keluar</span>
-                  <span className="text-[10px] opacity-80">({expenseTxCount})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTxFilterType('debt_payment')}
-                  className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
-                    txFilterType === 'debt_payment'
-                      ? 'bg-amber-600 text-white font-bold shadow-xs'
-                      : 'text-amber-700 hover:text-amber-800'
-                  }`}
-                >
-                  <span>Cicilan</span>
-                  <span className="text-[10px] opacity-80">({debtTxCount})</span>
-                </button>
+                  + Catat Masuk
+                </Button>
               </div>
             </div>
 
-            {/* Explicit Separate Action Buttons */}
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-              <Button
-                onClick={openExpenseModal}
-                className="text-xs py-1.5 px-3 bg-rose-600 hover:bg-rose-700 shadow-xs"
+            {/* Filter Pills row: 4 Equal Columns on Mobile (No Horizontal Scrolling) */}
+            <div className="grid grid-cols-4 gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setTxFilterType('all')}
+                className={`py-2 px-1 rounded-lg text-center transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+                  txFilterType === 'all'
+                    ? 'bg-white shadow-xs text-slate-900 font-bold'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
               >
-                - Catat Pengeluaran
-              </Button>
-              <Button
-                onClick={openIncomeModal}
-                className="text-xs py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 shadow-xs"
+                <span className="truncate">Semua</span>
+                <span className="text-[10px] opacity-75">({transactions.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTxFilterType('income')}
+                className={`py-2 px-1 rounded-lg text-center transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+                  txFilterType === 'income'
+                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                    : 'text-emerald-700 hover:text-emerald-800'
+                }`}
               >
-                + Catat Pemasukan
-              </Button>
+                <span className="truncate">+ Masuk</span>
+                <span className="text-[10px] opacity-85">({incomeTxCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTxFilterType('expense')}
+                className={`py-2 px-1 rounded-lg text-center transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+                  txFilterType === 'expense'
+                    ? 'bg-rose-600 text-white font-bold shadow-xs'
+                    : 'text-rose-700 hover:text-rose-800'
+                }`}
+              >
+                <span className="truncate">- Keluar</span>
+                <span className="text-[10px] opacity-85">({expenseTxCount})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTxFilterType('debt_payment')}
+                className={`py-2 px-1 rounded-lg text-center transition flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+                  txFilterType === 'debt_payment'
+                    ? 'bg-amber-600 text-white font-bold shadow-xs'
+                    : 'text-amber-700 hover:text-amber-800'
+                }`}
+              >
+                <span className="truncate">Cicilan</span>
+                <span className="text-[10px] opacity-85">({debtTxCount})</span>
+              </button>
             </div>
           </div>
 
@@ -1295,8 +1301,97 @@ export default function KeuanganPage() {
               desc="Mulai catat pemasukan atau pengeluaran Anda dengan tombol di atas."
             />
           ) : (
-            <Card className="overflow-hidden p-0 border-slate-200">
-              <div className="overflow-x-auto">
+            <Card className="overflow-hidden p-0 border-slate-200 shadow-xs">
+              {/* MOBILE VIEW (CARD FEED / ZERO HORIZONTAL SCROLL) */}
+              <div className="block md:hidden divide-y divide-slate-100">
+                {filteredTransactions.map((t) => {
+                  const isIncome = t.transaction_type === 'income';
+                  const isDebt = t.transaction_type === 'debt_payment';
+                  return (
+                    <div key={t.id} className="p-3.5 space-y-2 hover:bg-slate-50/70 transition">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                          <span
+                            className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                              isIncome
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : isDebt
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-rose-100 text-rose-700'
+                            }`}
+                          >
+                            {isIncome ? '+' : '-'}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-slate-800 text-xs sm:text-sm truncate">
+                              {t.description || t.category_name || (isDebt ? 'Cicilan Utang' : 'Pengeluaran')}
+                            </p>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5 flex-wrap">
+                              {t.category_name && (
+                                <span className="font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                  {t.category_name}
+                                </span>
+                              )}
+                              <span>•</span>
+                              <span>{t.account_name}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`text-sm font-extrabold whitespace-nowrap block ${
+                              isIncome
+                                ? 'text-emerald-600'
+                                : isDebt
+                                ? 'text-amber-600'
+                                : 'text-rose-600'
+                            }`}
+                          >
+                            {isIncome ? '+' : '-'} {formatRupiah(t.amount)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100/70 text-slate-500">
+                        <span className="text-[10px] text-slate-400">
+                          {formatJakarta(t.transaction_date)}
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          {t.transaction_type !== 'debt_payment' && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopyTransaction(t)}
+                              className="text-indigo-600 hover:text-indigo-800 font-semibold px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-[11px] inline-flex items-center gap-1 transition"
+                              title="Salin transaksi ini (untuk transaksi rutin)"
+                            >
+                              <span>📋</span>
+                              <span>Salin</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeletingItem({
+                                type: 'transaction',
+                                id: t.id,
+                                title: `transaksi ${t.description || t.category_name || ''} (${formatRupiah(t.amount)})`,
+                              })
+                            }
+                            className="text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 text-[11px] transition"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DESKTOP VIEW (TABLE FORMAT) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-100/70 uppercase text-[10px] font-semibold text-slate-600">
