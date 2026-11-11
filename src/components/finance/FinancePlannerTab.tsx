@@ -466,3 +466,4 @@ export function FinancePlannerTab({ summary, health }: FinancePlannerTabProps) {
     </div>
   );
 }
+

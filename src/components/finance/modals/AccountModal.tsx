@@ -124,3 +124,4 @@ export function AccountModal({ isOpen, onClose, onSuccess }: AccountModalProps) 
     </div>
   );
 }
+

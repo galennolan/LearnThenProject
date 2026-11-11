@@ -10,3 +10,4 @@ export { AccountModal } from './modals/AccountModal';
 export { DebtModal } from './modals/DebtModal';
 export { DebtPaymentModal } from './modals/DebtPaymentModal';
 export type { TransactionInitialData } from './modals/ExpenseModal';
+

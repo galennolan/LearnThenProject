@@ -207,3 +207,4 @@ export function DebtModal({ isOpen, onClose, onSuccess }: DebtModalProps) {
     </div>
   );
 }
+
