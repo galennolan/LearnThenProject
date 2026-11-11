@@ -159,7 +159,7 @@ export default function KeuanganPage() {
   if (error) return <ErrorState message={error} onRetry={loadData} />;
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-5">
+    <div className="mx-auto w-full max-w-5xl space-y-6">
       {/* Top Header */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
