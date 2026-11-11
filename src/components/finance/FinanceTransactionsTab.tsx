@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Transaction } from '../../types/finance';
 import { formatRupiah } from '../../services/finance';
-import { formatTransactionDateTime } from '../../lib/time';
+import { formatJakarta } from '../../lib/time';
 import { Button, Card, EmptyState, TextInput } from '../ui';
 
 interface FinanceTransactionsTabProps {
@@ -183,9 +183,9 @@ export function FinanceTransactionsTab({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1.5 border-t border-slate-100/70 text-slate-500">
-                    <span className="text-xs text-slate-500 font-medium">
-                      {formatTransactionDateTime(t.transaction_date, t.created_at || t.reference_type)}
+                  <div className="flex items-center justify-between text-[11px] pt-1.5 border-t border-slate-100/70 text-slate-500">
+                    <span className="text-[10px] text-slate-400">
+                      {formatJakarta(t.transaction_date)}
                     </span>
 
                     <div className="flex items-center gap-1.5">
@@ -193,7 +193,7 @@ export function FinanceTransactionsTab({
                         <button
                           type="button"
                           onClick={() => onCopyTransaction(t)}
-                          className="text-indigo-600 hover:text-indigo-800 font-semibold px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-xs inline-flex items-center gap-1 transition"
+                          className="text-indigo-600 hover:text-indigo-800 font-semibold px-2 py-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-[11px] inline-flex items-center gap-1 transition"
                           title="Salin transaksi ini (untuk transaksi rutin)"
                         >
                           <span>📋</span>
@@ -203,7 +203,7 @@ export function FinanceTransactionsTab({
                       <button
                         type="button"
                         onClick={() => onDeleteTransaction(t)}
-                        className="text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 text-xs transition"
+                        className="text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded-md hover:bg-red-50 text-[11px] transition"
                       >
                         Hapus
                       </button>
@@ -218,8 +218,8 @@ export function FinanceTransactionsTab({
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-100/70 uppercase text-xs font-semibold text-slate-600">
-                  <th className="py-2.5 px-3">Waktu & Tanggal</th>
+                <tr className="border-b border-slate-200 bg-slate-100/70 uppercase text-[10px] font-semibold text-slate-600">
+                  <th className="py-2.5 px-3">Tanggal</th>
                   <th className="py-2.5 px-3">Deskripsi / Kategori</th>
                   <th className="py-2.5 px-3">Rekening Kas</th>
                   <th className="py-2.5 px-3 text-right">Nominal Uang</th>
@@ -229,8 +229,8 @@ export function FinanceTransactionsTab({
               <tbody className="divide-y divide-slate-100">
                 {filteredTransactions.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50 transition">
-                    <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 font-medium text-xs">
-                      {formatTransactionDateTime(t.transaction_date, t.created_at || t.reference_type)}
+                    <td className="py-2.5 px-3 whitespace-nowrap text-slate-500">
+                      {formatJakarta(t.transaction_date)}
                     </td>
                     <td className="py-2.5 px-3">
                       <p className="font-semibold text-slate-800">{t.description || '-'}</p>
