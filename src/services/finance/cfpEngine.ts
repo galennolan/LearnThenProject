@@ -199,15 +199,26 @@ export function calculateCFPHealthAnalysis(
       ? 12
       : 0;
 
-  const savingsRatePercent =
-    monthlyIncome > 0
-      ? Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100)
-      : 0;
+  // Savings Rate & Evaluasi Arus Kas
+  // Catatan: Jika pemasukan masih 0 tapi sudah ada pengeluaran, kondisi kas defisit (bukan 0% impas)
+  let savingsRatePercent = 0;
+  if (monthlyIncome > 0) {
+    savingsRatePercent = Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100);
+  } else if (monthlyExpense > 0) {
+    // Pengeluaran ada tapi pemasukan 0 = defisit total
+    savingsRatePercent = -100;
+  } else {
+    // Belum ada transaksi masuk maupun keluar
+    savingsRatePercent = 0;
+  }
 
   const netWorth = totalBalance - totalOutstandingDebt;
 
-  // Skor Kesehatan Finansial 0 - 100
+  // Skor Kesehatan Finansial 0 - 100 (CFP 4-Pillar Scoring)
   let score = 0;
+
+  // Pilar 1: Beban Utang / Debt Service Ratio (Maks 35 Poin)
+  // Catatan: DSR makin kecil makin sehat (ideal CFP < 30%)
   if (dsrPercent === 0 && activeDebtsCount === 0) score += 35;
   else if (dsrPercent <= 20) score += 35;
   else if (dsrPercent <= 30) score += 28;
@@ -215,17 +226,39 @@ export function calculateCFPHealthAnalysis(
   else if (dsrPercent <= 50) score += 10;
   else score += 5;
 
+  // Pilar 2: Ketahanan Dana Darurat (Maks 30 Poin)
   if (emergencyFundMonths >= 6) score += 30;
   else if (emergencyFundMonths >= 3) score += 22;
   else if (emergencyFundMonths >= 1) score += 14;
+  else if (emergencyFundMonths > 0) score += 8;
   else score += 5;
 
-  if (savingsRatePercent >= 25) score += 25;
-  else if (savingsRatePercent >= 15) score += 20;
-  else if (savingsRatePercent >= 5) score += 12;
-  else if (savingsRatePercent >= 0) score += 8;
-  else score += 0;
+  // Pilar 3: Laju Tabungan / Arus Kas Bulanan (Maks 25 Poin)
+  // Menjamin penambahan pemasukan SELALU menaikkan skor (monotonik non-decreasing)
+  if (savingsRatePercent >= 25) {
+    score += 25; // Tabungan prima (≥ 25%)
+  } else if (savingsRatePercent >= 15) {
+    score += 20; // Standar ideal CFP (15% - 24%)
+  } else if (savingsRatePercent >= 5) {
+    score += 12; // Positif wajar (5% - 14%)
+  } else if (savingsRatePercent >= 0) {
+    // Impas / tipis (0% - 4%)
+    score += monthlyIncome > 0 ? 8 : (monthlyExpense === 0 ? 8 : 0);
+  } else {
+    // Kas defisit (Pengeluaran > Pemasukan):
+    // Apabila user mulai menambah pemasukan, apresiasi pemulihan defisit agar skor terus naik menuju impas
+    if (monthlyIncome >= monthlyExpense * 0.8) {
+      score += 6; // Hampir impas (menutup ≥ 80% pengeluaran)
+    } else if (monthlyIncome >= monthlyExpense * 0.5) {
+      score += 4; // Menutup ≥ 50% pengeluaran
+    } else if (monthlyIncome > 0) {
+      score += 2; // Mulai ada pemasukan
+    } else {
+      score += 0; // Pemasukan 0 tapi ada pengeluaran = 0 poin
+    }
+  }
 
+  // Pilar 4: Kekayaan Bersih / Net Worth (Maks 10 Poin)
   if (netWorth > 0) score += 10;
   else if (netWorth === 0) score += 5;
   else score += 0;

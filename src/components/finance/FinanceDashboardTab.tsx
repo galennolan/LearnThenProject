@@ -107,7 +107,7 @@ export function FinanceDashboardTab({
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                DSR: <strong>{health.dsrPercent}%</strong> • Dana Darurat: <strong>{health.emergencyFundMonths} bln</strong> • Kesiapan Investasi:{' '}
+                Beban Cicilan (DSR): <strong className={health.dsrPercent <= 30 ? 'text-emerald-700' : 'text-rose-700'}>{health.dsrPercent}%</strong> {health.dsrPercent <= 30 ? '(Aman <30%)' : '(Tinggi)'} • Dana Darurat: <strong>{health.emergencyFundMonths} bln</strong> • Kesiapan Investasi:{' '}
                 <strong
                   className={
                     health.investmentReadiness?.readinessColor === 'emerald'

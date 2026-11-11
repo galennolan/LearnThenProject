@@ -77,9 +77,14 @@ export function FinancePlannerTab({ summary, health }: FinancePlannerTabProps) {
         {/* 4 Pillars of Financial Ratios */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/10">
           <div className="bg-white/5 p-3 rounded-lg border border-white/5">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">
-              Debt Service (DSR)
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 uppercase font-semibold">
+                Beban Cicilan (DSR)
+              </span>
+              <span className="text-[9px] text-slate-400 bg-white/10 px-1 py-0.2 rounded" title="Makin kecil makin sehat">
+                Makin kecil makin sehat
+              </span>
+            </div>
             <p className={`text-base font-bold mt-0.5 ${health.dsrPercent > 35 ? 'text-rose-400' : 'text-emerald-400'}`}>
               {health.dsrPercent}%
             </p>
