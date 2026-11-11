@@ -1,7 +1,7 @@
 import type { FinanceSummary, Account, Debt, Transaction } from '../../types/finance';
 import { ACCOUNT_TYPE_LABELS } from '../../types/finance';
 import { formatRupiah } from '../../services/finance';
-import { formatJakarta } from '../../lib/time';
+import { formatTransactionDateTime } from '../../lib/time';
 import { Card, EmptyState } from '../ui';
 
 interface FinanceDashboardTabProps {
@@ -236,8 +236,8 @@ export function FinanceDashboardTab({
                     <p className="font-medium text-slate-800 truncate">
                       {t.description || t.category_name}
                     </p>
-                    <p className="text-[10px] text-slate-400">
-                      {formatJakarta(t.transaction_date)} • {t.account_name}
+                    <p className="text-xs text-slate-500">
+                      {formatTransactionDateTime(t.transaction_date, t.created_at || t.reference_type)} • {t.account_name}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
