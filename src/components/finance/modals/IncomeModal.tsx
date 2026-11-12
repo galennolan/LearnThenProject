@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { Account, Category } from '../../../types/finance';
 import { ACCOUNT_TYPE_LABELS } from '../../../types/finance';
 import { formatRupiah, createTransaction, createCategory } from '../../../services/finance';
-import { todayJakartaISO } from '../../../lib/time';
+import { todayJakartaISO, currentTimeJakarta } from '../../../lib/time';
 import { useToast } from '../../../hooks/useToast';
 import { Button, SecondaryButton, SelectInput, TextInput, Field } from '../../ui';
 import type { TransactionInitialData } from './ExpenseModal';
@@ -16,6 +16,8 @@ interface IncomeModalProps {
   onSuccess: () => Promise<void> | void;
   onCategoryCreated?: (newCategory: Category) => void;
 }
+
+const QUICK_INCOME_AMOUNTS = [50000, 100000, 500000, 1000000, 2500000, 5000000];
 
 export function IncomeModal({
   isOpen,
@@ -37,20 +39,22 @@ export function IncomeModal({
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [date, setDate] = useState(todayJakartaISO());
+  const [time, setTime] = useState(currentTimeJakarta());
   const [desc, setDesc] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // New category creation within modal
+  // Form kategori baru
   const [showCatInput, setShowCatInput] = useState(false);
   const [newCatName, setNewCatName] = useState('');
 
-  // Sync state whenever modal opens or initialData changes
+  // Sinkronisasi state saat modal dibuka atau initialData berubah
   useEffect(() => {
     if (isOpen) {
       setAmount(initialData?.amount || '');
       setAccountId(initialData?.accountId || (accounts[0]?.id ?? ''));
       setCategoryId(initialData?.categoryId || (incomeCategories[0]?.id ?? ''));
       setDate(initialData?.date || todayJakartaISO());
+      setTime(currentTimeJakarta());
       setDesc(initialData?.description || '');
       setShowCatInput(false);
       setNewCatName('');
@@ -63,6 +67,19 @@ export function IncomeModal({
   const parsedAmount = Number(amount) || 0;
   const currentAccBal = Number(selectedAccount?.current_balance) || 0;
   const simulatedBalance = currentAccBal + parsedAmount;
+
+  // Nama hari dalam Bahasa Indonesia untuk tanggal yang dipilih
+  const formattedDayLabel = useMemo(() => {
+    if (!date) return '';
+    const d = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(d);
+  }, [date]);
 
   const quickAddAmount = (val: number) => {
     const cur = Number(amount) || 0;
@@ -97,6 +114,9 @@ export function IncomeModal({
 
     setSubmitting(true);
     try {
+      // Simpan waktu lengkap ke reference_type bila ada jam
+      const fullTimestamp = `${date}T${time ? time + ':00' : '00:00:00'}+07:00`;
+
       await createTransaction({
         account_id: accountId,
         category_id: categoryId || null,
@@ -104,8 +124,9 @@ export function IncomeModal({
         transaction_date: date,
         amount: amt,
         description: desc,
+        reference_type: fullTimestamp,
       });
-      push('Pemasukan uang berhasil dicatat!');
+      push(`Pemasukan ${formatRupiah(amt)} berhasil dicatat!`);
       onClose();
       await onSuccess();
     } catch (err) {
@@ -116,94 +137,89 @@ export function IncomeModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl space-y-4 my-6">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 font-bold text-base">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden my-6 transition-all">
+        {/* Header Modal Bersih & Modern */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 font-bold text-lg border border-emerald-200/60">
               +
             </span>
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Catat Pemasukan Kas</h3>
-              <p className="text-[11px] text-slate-500">Mencatat uang masuk dan otomatis menambah saldo rekening tujuan.</p>
+              <h3 className="font-bold text-slate-900 text-base">Catat Pemasukan</h3>
+              <p className="text-xs text-slate-500">Mencatat kas masuk dan menambah saldo rekening.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-lg p-1"
+            className="text-slate-400 hover:text-slate-700 h-8 w-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition text-lg"
+            title="Tutup dialog"
           >
-            ×
+            ✕
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* BAGIAN UANG & REKENING PENERIMA */}
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-3">
-            <div className="flex items-center justify-between border-b border-emerald-200/70 pb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1.5">
-                <span>💵</span> Bagian Uang & Rekening Tujuan
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Hero Input Nominal Uang */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
+              Nominal Pemasukan
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-extrabold text-emerald-600 select-none">
+                Rp
               </span>
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full">
-                Uang Masuk
-              </span>
+              <input
+                type="number"
+                min="1"
+                placeholder="0"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 text-2xl font-black text-slate-900 bg-slate-50/70 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition shadow-xs"
+                required
+                autoFocus
+              />
             </div>
 
-            {/* Input Nominal Uang */}
-            <div>
-              <label className="text-xs font-bold text-slate-800 block mb-1">
-                Nominal Pemasukan
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-2.5 font-black text-emerald-600 text-base select-none">
-                  Rp
-                </span>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="Contoh: 3500000"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="w-full pl-11 pr-3 py-2 text-lg font-black text-slate-900 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-xs"
-                  required
-                  autoFocus
-                />
-              </div>
-
-              {parsedAmount > 0 && (
-                <div className="mt-1.5 flex items-center justify-between text-xs font-bold text-emerald-700 px-1">
-                  <span>{formatRupiah(parsedAmount)}</span>
+            {/* Formatted Text Preview & Reset */}
+            <div className="flex items-center justify-between text-xs min-h-[20px] px-1">
+              {parsedAmount > 0 ? (
+                <>
+                  <span className="font-bold text-emerald-700">
+                    {formatRupiah(parsedAmount)}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setAmount('')}
-                    className="text-[11px] font-normal text-slate-400 hover:text-slate-600 underline"
+                    className="text-slate-400 hover:text-slate-600 font-medium underline transition"
                   >
-                    Reset Nominal
+                    Reset
                   </button>
-                </div>
+                </>
+              ) : (
+                <span className="text-slate-400">Ketik angka atau klik tombol nominal cepat di bawah</span>
               )}
-
-              {/* Quick Add Amount Chips */}
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {[50000, 100000, 500000, 1000000, 2500000, 5000000].map((val) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => quickAddAmount(val)}
-                    className="text-[11px] font-semibold bg-white border border-emerald-200 text-emerald-800 hover:bg-emerald-100 px-2 py-1 rounded-md transition shadow-xs"
-                  >
-                    +{val >= 1000000 ? `${val / 1000000} Jt` : `${val / 1000}rb`}
-                  </button>
-                ))}
-              </div>
             </div>
 
-            {/* Pilihan Rekening Penerima Uang */}
-            <div>
-              <label className="text-xs font-bold text-slate-800 block mb-1">
-                Rekening Penerima (Uang Masuk Disimpan ke Mana)
-              </label>
+            {/* Quick Add Amount Chips */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {QUICK_INCOME_AMOUNTS.map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => quickAddAmount(val)}
+                  className="text-xs font-semibold bg-slate-100/90 text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 border border-slate-200 px-2.5 py-1.5 rounded-lg transition"
+                >
+                  +{val >= 1000000 ? `${val / 1000000} Jt` : `${val / 1000}rb`}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Rekening Tujuan & Simulasi Saldo */}
+          <div className="space-y-2 pt-1 border-t border-slate-100">
+            <Field label="Rekening Tujuan (Kas Masuk Disimpan ke Mana)">
               <SelectInput
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
@@ -215,22 +231,18 @@ export function IncomeModal({
                   </option>
                 ))}
               </SelectInput>
-            </div>
+            </Field>
 
-            {/* Live Saldo Simulation Card */}
+            {/* Live Saldo Impact Strip */}
             {selectedAccount && (
-              <div className="bg-white p-3 rounded-lg border border-emerald-200 text-xs space-y-1.5 shadow-xs">
-                <div className="flex justify-between text-slate-600">
-                  <span>Saldo Saat Ini ({selectedAccount.name}):</span>
-                  <span className="font-semibold">{formatRupiah(currentAccBal)}</span>
+              <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-1 transition">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Saldo saat ini:</span>
+                  <span className="font-semibold text-slate-900">{formatRupiah(currentAccBal)}</span>
                 </div>
-                <div className="flex justify-between text-emerald-600 font-semibold">
-                  <span>Uang Diterima:</span>
-                  <span>+ {formatRupiah(parsedAmount)}</span>
-                </div>
-                <div className="border-t border-slate-100 pt-1.5 flex justify-between font-bold">
-                  <span className="text-slate-800">Estimasi Saldo Baru:</span>
-                  <span className="text-emerald-700 font-black">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Saldo setelah transaksi:</span>
+                  <span className="font-bold text-emerald-700">
                     {formatRupiah(simulatedBalance)}
                   </span>
                 </div>
@@ -238,64 +250,96 @@ export function IncomeModal({
             )}
           </div>
 
-          {/* BAGIAN DETAIL & KATEGORI */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block border-b border-slate-200 pb-1.5">
-              📋 Detail & Sumber Pemasukan
-            </span>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Tanggal Pemasukan">
-                <TextInput
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  required
-                />
-              </Field>
-
-              <Field label="Kategori Pemasukan">
-                <div className="flex gap-1.5">
-                  <SelectInput
-                    value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="flex-1"
-                  >
-                    {incomeCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </SelectInput>
-                  <button
-                    type="button"
-                    onClick={() => setShowCatInput(!showCatInput)}
-                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white hover:bg-slate-100 font-semibold"
-                    title="Tambah kategori baru"
-                  >
-                    + Baru
-                  </button>
-                </div>
-              </Field>
+          {/* Tanggal, Hari, & Jam */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700">Tanggal Transaksi</label>
+                <span className="text-xs font-semibold text-indigo-700">
+                  {formattedDayLabel || 'Hari ini'}
+                </span>
+              </div>
+              <TextInput
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                required
+              />
             </div>
 
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700 block">Jam (WIB)</label>
+              <TextInput
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Kategori & Keterangan */}
+          <div className="space-y-3 pt-1 border-t border-slate-100">
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-700">Kategori Pemasukan</label>
+                <button
+                  type="button"
+                  onClick={() => setShowCatInput(!showCatInput)}
+                  className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline transition"
+                >
+                  {showCatInput ? 'Batal Tambah' : '+ Kategori Baru'}
+                </button>
+              </div>
+
+              {/* Popular Category Chips */}
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {incomeCategories.slice(0, 5).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategoryId(c.id)}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition ${
+                      categoryId === c.id
+                        ? 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+
+              <SelectInput
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
+                {incomeCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </SelectInput>
+            </div>
+
+            {/* Quick Add Category Field */}
             {showCatInput && (
-              <div className="flex gap-1.5 bg-white p-2 rounded-lg border border-slate-200">
+              <div className="flex gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                 <TextInput
-                  placeholder="Nama kategori pemasukan baru..."
+                  placeholder="Nama kategori baru..."
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
-                  className="text-xs py-1"
+                  className="text-xs py-1.5 flex-1"
                 />
-                <Button type="button" onClick={handleAddCategory} className="text-xs py-1 px-3">
+                <Button type="button" onClick={handleAddCategory} className="text-xs py-1.5 px-3">
                   Simpan
                 </Button>
               </div>
             )}
 
-            <Field label="Keterangan / Catatan Tambahan (Opsional)">
+            <Field label="Catatan / Keterangan (Opsional)">
               <TextInput
-                placeholder="Contoh: Gaji bulanan kantor, hasil jualan, transfer teman, dll"
+                placeholder="Contoh: Gaji bulanan kantor, hasil jualan, transfer, dsb"
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
               />
@@ -303,21 +347,25 @@ export function IncomeModal({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2 pt-2">
+          <div className="flex gap-3 pt-3 border-t border-slate-100">
             <SecondaryButton
               type="button"
               onClick={onClose}
-              className="flex-1"
+              className="flex-1 py-3 text-sm font-semibold"
               disabled={submitting}
             >
               Batal
             </SecondaryButton>
             <Button
               type="submit"
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5"
-              disabled={submitting}
+              className="flex-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 text-sm shadow-sm transition active:scale-[0.99]"
+              disabled={submitting || parsedAmount <= 0}
             >
-              {submitting ? 'Menyimpan...' : 'Simpan Pemasukan'}
+              {submitting
+                ? 'Menyimpan...'
+                : parsedAmount > 0
+                ? `Simpan Pemasukan (+ ${formatRupiah(parsedAmount)})`
+                : 'Simpan Pemasukan'}
             </Button>
           </div>
         </form>
@@ -325,4 +373,3 @@ export function IncomeModal({
     </div>
   );
 }
-
